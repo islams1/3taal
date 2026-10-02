@@ -111,8 +111,8 @@ export default function App() {
         )}
 
         {role && (
-          <button type="button" className="switch-user" dir="rtl" onClick={logout}>
-            داخل كـ{role === 'islam' ? 'إسلام' : 'شادي'} · <u>تغيير المستخدم</u>
+          <button type="button" className="switch-user" onClick={logout}>
+            Signed in as {role === 'islam' ? 'Islam' : 'Shady'} · <u>Switch user</u>
           </button>
         )}
       </main>

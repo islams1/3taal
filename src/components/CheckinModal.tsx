@@ -115,8 +115,8 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
         )}
         {q.kind === 'yesno' && (
           <div className="yn" role="radiogroup" aria-label={q.text}>
-            <button type="button" data-v="yes" aria-pressed={a[q.key] === 'نعم'} onClick={() => set(q.key, 'نعم' as never)}>نعم</button>
-            <button type="button" data-v="no" aria-pressed={a[q.key] === 'لا'} onClick={() => set(q.key, 'لا' as never)}>لا</button>
+            <button type="button" data-v="yes" aria-pressed={a[q.key] === 'Yes'} onClick={() => set(q.key, 'Yes' as never)}>YES</button>
+            <button type="button" data-v="no" aria-pressed={a[q.key] === 'No'} onClick={() => set(q.key, 'No' as never)}>NO</button>
           </div>
         )}
         {q.kind === 'choice' && (
@@ -127,9 +127,9 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
           </div>
         )}
         {q.kind === 'text' && (
-          <textarea rows={3} value={a[q.key] as string} placeholder="اكتب هنا…" onChange={(e) => set(q.key, e.target.value as never)} />
+          <textarea rows={3} value={a[q.key] as string} placeholder="Type here…" onChange={(e) => set(q.key, e.target.value as never)} />
         )}
-        {bad && <p className="q-err">مطلوب</p>}
+        {bad && <p className="q-err">Required</p>}
       </fieldset>
     )
   }
@@ -143,58 +143,58 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
           <button type="button" className="x" onClick={() => ref.current?.close()} aria-label="Close">&times;</button>
         </header>
 
-        <div className="day-body" ref={bodyRef} dir="rtl" lang="ar">
+        <div className="day-body" ref={bodyRef}>
           {status === 'sent' || status === 'not-configured' ? (
             <div className="ck-done">
               <span className="ck-icon" aria-hidden="true">✓</span>
-              <h3>{status === 'sent' ? 'تم إرسال الـ check-in' : 'اتحفظ على الجهاز ده'}</h3>
-              <p>{status === 'sent' ? 'وصلت إجاباتك وصورك، هراجعها وأرد عليك قريب 💪' : 'جوجل شيت لسه مش متوصل، الإجابات متسجلتش أونلاين.'}</p>
+              <h3>{status === 'sent' ? 'Check-in sent' : 'Saved on this device'}</h3>
+              <p>{status === 'sent' ? 'Your answers and photos are in – I\'ll review them and get back to you soon 💪' : 'Google Sheet isn\'t connected yet, so the answers weren\'t saved online.'}</p>
               <a className="wa-btn" href={waLink} target="_blank" rel="noopener">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 00-8.6 15.1L2 22l5-1.3A10 10 0 1012 2zm0 18.2a8.2 8.2 0 01-4.2-1.2l-.3-.2-3 .8.8-2.9-.2-.3A8.2 8.2 0 1112 20.2zm4.5-6.1c-.2-.1-1.5-.7-1.7-.8s-.4-.1-.6.1-.7.8-.8 1-.3.2-.5.1a6.7 6.7 0 01-3.3-2.9c-.3-.4.2-.4.7-1.3.1-.2 0-.3 0-.4l-.8-1.8c-.2-.5-.4-.4-.6-.4h-.5a1 1 0 00-.7.3 3 3 0 00-.9 2.2 5.2 5.2 0 001.1 2.7 11.8 11.8 0 004.5 4c1.7.7 2.3.8 3.2.6a2.7 2.7 0 001.8-1.3 2.2 2.2 0 00.2-1.3c-.1-.1-.3-.2-.5-.3z"/></svg>
-                ابعتها للكوتش على واتساب
+                Send to coach on WhatsApp
               </a>
-              <p className="wa-note">هيفتحلك واتساب والرسالة جاهزة، دوس إرسال بس</p>
-              <button type="button" className="logbtn" onClick={() => ref.current?.close()}>تمام</button>
+              <p className="wa-note">WhatsApp opens with the message ready – just tap send</p>
+              <button type="button" className="logbtn" onClick={() => ref.current?.close()}>Done</button>
             </div>
           ) : (
             <div className="ck-form">
               <fieldset className={missing.has('weight') ? 'q missing' : 'q'} data-key="weight">
-                <legend><span className="q-n">⚖</span>الوزن</legend>
+                <legend><span className="q-n">⚖</span>Weight</legend>
                 <div className="ck-weights">
                   <label className="f">
-                    <span className="lbl">الوزن الحالي {change}</span>
+                    <span className="lbl">Current weight {change}</span>
                     <span className="inp"><input type="number" inputMode="decimal" min={0} step={0.1} placeholder="0" dir="ltr"
                       value={a.weight} onChange={(e) => set('weight', e.target.value)} /><em>kg</em></span>
                   </label>
                   <label className="f">
-                    <span className="lbl">الوزن السابق</span>
+                    <span className="lbl">Previous weight</span>
                     <span className="inp"><input type="number" inputMode="decimal" min={0} step={0.1} placeholder="–" dir="ltr"
                       value={a.prevWeight} onChange={(e) => set('prevWeight', e.target.value)} /><em>kg</em></span>
                   </label>
                 </div>
-                {missing.has('weight') && <p className="q-err">مطلوب</p>}
+                {missing.has('weight') && <p className="q-err">Required</p>}
               </fieldset>
 
               {QUESTIONS.map(field)}
 
               <fieldset className="q">
-                <legend><span className="q-n">11</span>ابعتلي صورك على معدة فاضية!</legend>
+                <legend><span className="q-n">11</span>Send your photos on an empty stomach!</legend>
                 <div className="ck-photos">
                   {photos.map((p) => (
                     <figure key={p.id}>
                       <img src={p.preview} alt="" />
-                      <button type="button" aria-label="شيل الصورة" onClick={() => setPhotos((ps) => ps.filter((x) => x.id !== p.id))}>&times;</button>
+                      <button type="button" aria-label="Remove photo" onClick={() => setPhotos((ps) => ps.filter((x) => x.id !== p.id))}>&times;</button>
                     </figure>
                   ))}
                   {photos.length < MAX_PHOTOS && (
                     <label className="ck-add">
                       <input type="file" accept="image/*" multiple onChange={(e) => { addPhotos(e.target.files); e.target.value = '' }} />
                       <span aria-hidden="true">{busyPhotos ? '…' : '+'}</span>
-                      <small>{busyPhotos ? 'بجهز الصور' : 'أضف صور'}</small>
+                      <small>{busyPhotos ? 'Preparing…' : 'Add photos'}</small>
                     </label>
                   )}
                 </div>
-                <p className="ck-hint">لحد {MAX_PHOTOS} صور · قدام وجنب وضهر</p>
+                <p className="ck-hint">Up to {MAX_PHOTOS} photos · front, side and back</p>
               </fieldset>
             </div>
           )}
@@ -204,14 +204,14 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
           <>
             {status === 'failed' && (
               <p className="sync sync-queued" role="status">
-                مقدرتش أبعت – اتأكد من النت وجرب تاني، أو{' '}
-                <a href={whatsappLink(checkinMessage(a, photos.length))} target="_blank" rel="noopener">ابعت الإجابات على واتساب</a>
+                Couldn't send – check your connection and try again, or{' '}
+                <a href={whatsappLink(checkinMessage(a, photos.length))} target="_blank" rel="noopener">send the answers on WhatsApp</a>
               </p>
             )}
-            {missing.size > 0 && <p className="sync sync-queued" role="status">كمّل الأسئلة المطلوبة الأول</p>}
+            {missing.size > 0 && <p className="sync sync-queued" role="status">Please answer the required questions first</p>}
             <footer className="day-foot">
               <button type="button" className="finish" onClick={submit} disabled={status === 'sending' || busyPhotos}>
-                {status === 'sending' ? 'بيتبعت…' : 'إرسال'}
+                {status === 'sending' ? 'Sending…' : 'Send'}
               </button>
             </footer>
           </>

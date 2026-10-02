@@ -25,7 +25,7 @@ export function Stepper({ id, value, step, onChange, inputMode, label, base }: P
 
   return (
     <span className="inp step">
-      <button type="button" onClick={() => bump(-1)} aria-label={`نقّص ${label}`}>
+      <button type="button" onClick={() => bump(-1)} aria-label={`Decrease ${label}`}>
         &minus;
       </button>
       <input
@@ -39,7 +39,7 @@ export function Stepper({ id, value, step, onChange, inputMode, label, base }: P
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-      <button type="button" onClick={() => bump(1)} aria-label={`زوّد ${label}`}>
+      <button type="button" onClick={() => bump(1)} aria-label={`Increase ${label}`}>
         +
       </button>
     </span>

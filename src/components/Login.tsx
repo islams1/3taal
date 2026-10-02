@@ -9,15 +9,15 @@ const ICONS: Record<Role, string> = {
 }
 
 const USERS: { role: Role; name: string; note: string }[] = [
-  { role: 'islam', name: 'إسلام', note: 'المتدرب · التمارين والـ check-in' },
-  { role: 'shady', name: 'شادي', note: 'الكوتش · متابعة السجل' },
+  { role: 'islam', name: 'Islam', note: 'Trainee · workouts & check-in' },
+  { role: 'shady', name: 'Shady', note: 'Coach · progress review' },
 ]
 
 /** Who is using the site. Not a security boundary - just picks the screen. */
 export function Login({ onPick }: { onPick: (role: Role) => void }) {
   return (
-    <section className="login" dir="rtl" aria-label="اختار المستخدم">
-      <p className="login-q">مين بيدخل؟</p>
+    <section className="login" aria-label="Choose user">
+      <p className="login-q">Who's training?</p>
       <div className="login-btns">
         {USERS.map((u, i) => (
           <button key={u.role} type="button" className={`login-btn ${u.role}`} onClick={() => onPick(u.role)}

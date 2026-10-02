@@ -8,7 +8,7 @@ import { DailyRatings, ScoreStrip } from './DayExtras'
 import { ExerciseCard } from './ExerciseCard'
 import { Ring } from './Ring'
 
-const LOCALE = 'ar-EG-u-nu-latn'
+const LOCALE = 'en-GB'
 const fmtDate = (iso: string) =>
   new Date(iso).toLocaleDateString(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 const fmtShort = (iso: string) => new Date(iso).toLocaleDateString(LOCALE, { day: 'numeric', month: 'short' })
@@ -50,13 +50,13 @@ const previousOf = (s: SessionPayload, all: SessionPayload[]) =>
   all.find((x) => x.dayNumber === s.dayNumber && x.date < s.date)
 
 function Diff({ value, unit = '%', compact = false }: { value: number; unit?: string; compact?: boolean }) {
-  if (!value) return <b className="diff same">{compact ? '=' : '= زي المرة اللي فاتت'}</b>
-  return <b className={value > 0 ? 'diff up' : 'diff down'} dir="ltr">{value > 0 ? '▲ +' : '▼ '}{value}{unit}</b>
+  if (!value) return <b className="diff same">{compact ? '=' : '= same as last time'}</b>
+  return <b className={value > 0 ? 'diff up' : 'diff down'}>{value > 0 ? '▲ +' : '▼ '}{value}{unit}</b>
 }
 
 /** How this session compares with the last time the same day was done. */
 function CompareBar({ s, prev }: { s: SessionPayload; prev?: SessionPayload }) {
-  if (!prev) return <p className="compare first">أول مرة تتسجل في اليوم ده – مفيش مقارنة لسه.</p>
+  if (!prev) return <p className="compare first">First time this day was logged – nothing to compare with yet.</p>
   const prevRows = new Map(prev.rows.map((r) => [r.exercise, r]))
   let up = 0, down = 0, same = 0
   for (const r of s.rows) {
@@ -69,13 +69,13 @@ function CompareBar({ s, prev }: { s: SessionPayload; prev?: SessionPayload }) {
   }
   return (
     <div className="compare">
-      <span className="compare-title">مقارنة بآخر مرة ({fmtShort(prev.date)})</span>
-      <span>إجمالي اليوم <Diff value={dayScore(s) - dayScore(prev)} /></span>
+      <span className="compare-title">vs. last time ({fmtShort(prev.date)})</span>
+      <span>Day total <Diff value={dayScore(s) - dayScore(prev)} /></span>
       <span className="compare-weights">
-        الأوزان:
-        <b className="diff up">▲ {up} زادت</b>
-        <b className="diff down">▼ {down} قلّت</b>
-        <b className="diff same">= {same} زي ما هي</b>
+        Weights:
+        <b className="diff up">▲ {up} up</b>
+        <b className="diff down">▼ {down} down</b>
+        <b className="diff same">= {same} same</b>
       </span>
     </div>
   )
@@ -123,14 +123,14 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
   const photo = detail?.day ? `url(${assetUrl(detail.day.photo)})` : undefined
 
   return (
-    <dialog ref={ref} className={coach ? 'day history coach' : 'day history'} dir="rtl" aria-label="سجل التمارين" onClose={onClose}
+    <dialog ref={ref} className={coach ? 'day history coach' : 'day history'} aria-label="Workout history" onClose={onClose}
       onClick={(e) => !coach && e.target === e.currentTarget && ref.current?.close()}>
       <div className="day-box" style={photo ? ({ '--photo': photo } as CSSProperties) : undefined}>
         <header className="day-head">
           {selected ? (
             <>
-              <button type="button" className="back" onClick={() => setSelected(null)} aria-label="رجوع لكل الأيام">
-                <svg viewBox="0 0 10 16" aria-hidden="true"><path d="M2 2l6 6-6 6" /></svg>
+              <button type="button" className="back" onClick={() => setSelected(null)} aria-label="Back to all sessions">
+                <svg viewBox="0 0 10 16" aria-hidden="true"><path d="M8 2L2 8l6 6" /></svg>
               </button>
               <h2>
                 <small>DAY {selected.dayNumber}</small>{selected.dayLabel}
@@ -138,16 +138,16 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
               </h2>
               <div className="day-score">
                 <Ring value={dayScore(selected)} big />
-                <span className="lbl">إجمالي<br />اليوم</span>
+                <span className="lbl">Day<br />total</span>
               </div>
             </>
           ) : (
-            <h2><small>{coach ? 'أهلاً يا كوتش شادي' : 'سجل التمارين'}</small>View</h2>
+            <h2><small>{coach ? 'Welcome, Coach Shady' : 'HISTORY'}</small>View</h2>
           )}
           {coach ? (
-            <button type="button" className="logout" onClick={() => ref.current?.close()}>خروج</button>
+            <button type="button" className="logout" onClick={() => ref.current?.close()}>Log out</button>
           ) : (
-            <button type="button" className="x" onClick={() => ref.current?.close()} aria-label="اقفل">&times;</button>
+            <button type="button" className="x" onClick={() => ref.current?.close()} aria-label="Close">&times;</button>
           )}
         </header>
 
@@ -174,8 +174,8 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
             </>
           ) : (
             <>
-              <div className="hist-filter" role="tablist" aria-label="فلتر بالأيام">
-                <button type="button" role="tab" aria-selected={filter === null} onClick={() => setFilter(null)}>الكل</button>
+              <div className="hist-filter" role="tablist" aria-label="Filter by day">
+                <button type="button" role="tab" aria-selected={filter === null} onClick={() => setFilter(null)}>All</button>
                 {DAYS.map((d) => (
                   <button key={d.id} type="button" role="tab" aria-selected={filter === d.number} onClick={() => setFilter(d.number)}>
                     <small>DAY {d.number}</small>{d.label}
@@ -183,17 +183,17 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
                 ))}
               </div>
 
-              {state === 'loading' && !sessions.length && <p className="hist-msg">بيحمّل التمارين…</p>}
-              {state === 'offline' && <p className="hist-msg warn">مقدرتش أوصل للشيت – بعرض التمارين المتسجلة على الجهاز ده.</p>}
+              {state === 'loading' && !sessions.length && <p className="hist-msg">Loading your workouts…</p>}
+              {state === 'offline' && <p className="hist-msg warn">Couldn't reach Google Sheet – showing workouts saved on this device.</p>}
               {state === 'outdated' && (
                 <p className="hist-msg warn">
-                  سكريبت الشيت محتاج تحديث عشان السجل يظهر (Apps Script ← Deploy ← Manage deployments ← New version).
-                  بعرض التمارين المتسجلة على الجهاز ده.
+                  The Google Sheet script needs updating to show history (Apps Script → Deploy → Manage deployments → New version).
+                  Showing workouts saved on this device.
                 </p>
               )}
               {state !== 'loading' && !shown.length && (
                 <p className="hist-msg">
-                  مفيش تمارين متسجلة{filter ? ' لليوم ده' : ''} لسه. بعد كل تمرين دوس <b>خلّص التمرين</b> وهيظهر هنا.
+                  No finished workouts{filter ? ' for this day' : ''} yet. Press <b>Finish workout</b> after a session and it shows up here.
                 </p>
               )}
 
@@ -205,10 +205,10 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
                   const ups = s.rows.filter((r) => typeof r.change === 'number' && r.change > 0).length
                   const info = [
                     fmtTime(s.date),
-                    `${s.rows.length}/${total} تمارين`,
-                    ups ? `▲ ${ups} أوزان زادت` : null,
-                    s.cardio != null ? `كارديو ${s.cardio}/10` : null,
-                    s.diet != null ? `دايت ${s.diet}/10` : null,
+                    `${s.rows.length}/${total} exercises`,
+                    ups ? `▲ ${ups} heavier` : null,
+                    s.cardio != null ? `Cardio ${s.cardio}/10` : null,
+                    s.diet != null ? `Diet ${s.diet}/10` : null,
                   ].filter(Boolean)
                   return (
                     <li key={s.id}>
@@ -222,8 +222,8 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
                           <Ring value={score} />
                           {prev && <Diff value={score - dayScore(prev)} compact />}
                         </span>
-                        <span className="hist-go">عرض
-                          <svg viewBox="0 0 10 16" aria-hidden="true"><path d="M8 2L2 8l6 6" /></svg>
+                        <span className="hist-go">View
+                          <svg viewBox="0 0 10 16" aria-hidden="true"><path d="M2 2l6 6-6 6" /></svg>
                         </span>
                       </button>
                     </li>

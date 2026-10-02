@@ -316,7 +316,7 @@
   .q { border: 1px solid var(--line-1); border-radius: 14px; padding: 14px 16px 16px; background: var(--card); transition: border-color .2s, box-shadow .2s; min-width: 0; }
   .q:focus-within { border-color: rgba(var(--accent-rgb), .55); }
   .q.missing { border-color: #f87171; box-shadow: 0 0 0 3px rgba(248,113,113,.15); }
-  .q legend { float: right; width: 100%; display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 0;
+  .q legend { float: left; width: 100%; display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; padding: 0;
     font-size: 16px; font-weight: 600; line-height: 1.6; color: var(--text-1); }
   .q-n { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin-top: 1px; border-radius: 8px;
     background: var(--accent-soft); color: var(--accent); font: 700 14px/1 Cairo, sans-serif; }
@@ -376,7 +376,7 @@
   .checkin .sync a { color: inherit; font-weight: 700; }
   .checkin .day-foot .finish { min-width: 200px; font-family: Cairo, sans-serif; font-style: normal; font-weight: 700; }
   .finish:disabled { opacity: .6; cursor: wait; }
-  .checkin .sync { font-family: Cairo, sans-serif; direction: rtl; }
+  .checkin .sync { font-family: Cairo, sans-serif; }
 
   /* ---------- tablets / small laptops ---------- */
   @media (max-width: 1000px) {
@@ -466,8 +466,8 @@
   }
 
   /* =====================================================================
-     Arabic interface: Cairo for labels, numbers and buttons (Impact stays
-     for headings and exercise names), right-to-left popups
+     Readable type: Cairo for labels, numbers and buttons (Impact stays
+     for headings and exercise names)
      ===================================================================== */
   body { font-family: Impact, "Anton", Cairo, "Haettenschweiler", "Arial Narrow Bold", sans-serif; }
   .lbl, .h, .ex-main > .cell, .chips span, .inp input, .inp output, .inp em, .yn button, .logbtn, .finish, .sync,
@@ -486,16 +486,6 @@
   .hist-go { font-weight: 700; font-size: 14px; }
   .chips span b { font-style: normal; font-weight: 700; margin-right: 0; margin-inline-end: 5px; }
   .delta { margin-left: 0; margin-inline-start: auto; font-weight: 700; }
-
-  [dir="rtl"] .h-name, [dir="rtl"] .ex-main .c-name { text-align: right; padding-left: 0; }
-  [dir="rtl"] .hist-item { text-align: right; }
-  [dir="rtl"] .panel::before { clip-path: polygon(44px 0, 100% 0, 100% 100%, 0 100%, 0 44px); }
-  [dir="rtl"] .panel::after { clip-path: polygon(43.4px 0, 100% 0, 100% 100%, 0 100%, 0 43.4px); }
-  @media (max-width: 760px) {
-    [dir="rtl"] .panel::before { clip-path: polygon(26px 0, 100% 0, 100% 100%, 0 100%, 0 26px); }
-    [dir="rtl"] .panel::after { clip-path: polygon(25.4px 0, 100% 0, 100% 100%, 0 100%, 0 25.4px); }
-    [dir="rtl"] .ex-main .c-name { padding-right: 0; padding-left: 8px; }
-  }
 
   /* ---------- finished exercise folded to one line ---------- */
   .ex.folded { padding: 8px 0; }

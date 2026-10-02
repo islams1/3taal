@@ -44,7 +44,6 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       <dialog
         ref={ref}
         className="confirm"
-        dir="rtl"
         aria-labelledby="confirm-title"
         onCancel={(e) => { e.preventDefault(); answer(false) }}
         onClick={(e) => e.target === e.currentTarget && answer(false)}
@@ -57,8 +56,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             <h2 id="confirm-title">{pending.title}</h2>
             {pending.message && <p>{pending.message}</p>}
             <div className="confirm-actions">
-              <button type="button" className="logbtn" onClick={() => answer(false)}>{pending.cancelText ?? 'إلغاء'}</button>
-              <button type="button" className="finish" ref={okRef} onClick={() => answer(true)}>{pending.confirmText ?? 'تمام'}</button>
+              <button type="button" className="logbtn" onClick={() => answer(false)}>{pending.cancelText ?? 'Cancel'}</button>
+              <button type="button" className="finish" ref={okRef} onClick={() => answer(true)}>{pending.confirmText ?? 'OK'}</button>
             </div>
           </div>
         )}
