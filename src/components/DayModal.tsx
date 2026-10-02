@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { TRAINING_LOG_URL, type Day } from '../data/plan'
 import { commitment, useWorkoutLog } from '../hooks/useWorkoutLog'
+import { useConfirm } from './Confirm'
 import { ExerciseCard } from './ExerciseCard'
 import { Ring } from './Ring'
 import { buildSession, lastKey, rememberSession, sendSession, type LastWeights, type SyncResult } from '../lib/sheetSync'
@@ -29,6 +30,7 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
   const bodyRef = useRef<HTMLDivElement>(null)
   const { log, update, finish } = workoutLog
   const [sync, setSync] = useState<SyncResult | 'sending' | null>(null)
+  const confirm = useConfirm()
 
   useEffect(() => {
     const dlg = ref.current
@@ -48,7 +50,12 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
 
   const onFinish = async () => {
     if (!day) return
-    if (!confirm('Finish this workout? Today\'s weights become next time\'s "Previous weight" and the fields reset.')) return
+    const ok = await confirm({
+      title: 'Finish this workout?',
+      message: "Today's weights become next time's \"Previous weight\" and the fields reset.",
+      confirmText: 'Finish',
+    })
+    if (!ok) return
     const session = buildSession(day, log, last)
     finish(day.exercises.map((e) => e.id))
     onLastChange(rememberSession(session))

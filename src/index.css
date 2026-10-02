@@ -220,6 +220,20 @@
   .logbtn:hover, .logbtn:focus-visible { background: var(--accent); color: var(--on-accent); outline: none; }
   .finish:hover, .finish:focus-visible { filter: brightness(1.12); outline: none; }
 
+  /* ---------- in-app confirm popup ---------- */
+  dialog.confirm { margin: auto; padding: 0; border: 0; background: transparent; color: #fff; width: min(92vw, 420px); overflow: visible; }
+  dialog.confirm::backdrop { background: rgba(0,0,0,.6); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+  dialog.confirm[open] { animation: pop .2s ease-out; }
+  .confirm-box { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px; padding: 28px 24px 22px;
+    border-radius: 16px; border: 1px solid var(--line); background: var(--surface-0); box-shadow: 0 24px 70px rgba(0,0,0,.7); }
+  .confirm-icon { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft);
+    box-shadow: 0 0 0 8px rgba(var(--accent-rgb), .07); margin-bottom: 4px; }
+  .confirm-icon svg { width: 28px; height: 28px; fill: none; stroke: var(--accent); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+  .confirm-box h2 { font-weight: 400; font-style: italic; font-size: 26px; letter-spacing: .4px; line-height: 1.1; }
+  .confirm-box p { font-family: system-ui, sans-serif; font-size: 15px; line-height: 1.5; color: var(--muted); max-width: 320px; }
+  .confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; margin-top: 12px; }
+  .confirm-actions button { padding: 10px 12px; font-size: 19px; }
+
   /* ---------- weekly check-in form ---------- */
   dialog.checkin { width: min(96vw, 760px); }
   .checkin .day-box { background: radial-gradient(ellipse at 100% 0%, rgba(var(--accent-rgb), .12), transparent 55%), var(--surface-0); }
