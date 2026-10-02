@@ -31,8 +31,9 @@ function saveRole(r: Role | null) {
 
 export default function App() {
   const [role, setRole] = useState<Role | null>(readRole)
-  // picked during this visit (not restored): skip the intro delays on the buttons that appear
-  const [entered, setEntered] = useState(false)
+  // bumped every time the landing comes back into view, so the intro animation replays before the buttons
+  const [visit, setVisit] = useState(0)
+  const replay = () => setVisit((v) => v + 1)
   const [openDay, setOpenDay] = useState<Day | null>(null)
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(role === 'shady')
@@ -67,19 +68,20 @@ export default function App() {
 
   const pick = (r: Role) => {
     saveRole(r)
-    setEntered(true)
     setRole(r)
+    replay()
     if (r === 'shady') setHistoryOpen(true)
   }
   const logout = () => {
     saveRole(null)
     setHistoryOpen(false)
     setRole(null)
+    replay()
   }
 
   return (
     <>
-      <main className={entered ? 'landing entered' : 'landing'}>
+      <main className="landing" key={visit}>
         <Hero />
         {role === null && <Login onPick={pick} />}
 
@@ -117,15 +119,15 @@ export default function App() {
 
       {role === 'islam' && (
         <>
-          <DayModal day={openDay} onClose={() => setOpenDay(null)} workoutLog={workoutLog}
+          <DayModal day={openDay} onClose={() => { setOpenDay(null); replay() }} workoutLog={workoutLog}
             last={last}
             onLastChange={(l) => { setLast(l); setHistory(cachedHistory()) }}
             onSynced={() => { refreshLast(); refreshHistory() }} />
-          <CheckinModal open={checkinOpen} onClose={() => setCheckinOpen(false)} />
+          <CheckinModal open={checkinOpen} onClose={() => { setCheckinOpen(false); replay() }} />
         </>
       )}
       <HistoryModal open={historyOpen} coach={role === 'shady'}
-        onClose={() => { setHistoryOpen(false); if (role === 'shady') logout() }} />
+        onClose={() => { setHistoryOpen(false); if (role === 'shady') logout(); else replay() }} />
     </>
   )
 }

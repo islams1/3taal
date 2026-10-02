@@ -543,9 +543,6 @@
   .logout { flex: none; padding: 8px 18px; border-radius: 999px; cursor: pointer; font: 700 14px Cairo, sans-serif; color: var(--text-1);
     border: 1px solid var(--field-line); background: var(--field); transition: background .15s, border-color .15s; }
   .logout:hover, .logout:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
-  /* picked during this visit: show the buttons right away instead of after the intro */
-  .landing.entered .daynav button, .landing.entered .landing-actions > *, .landing.entered .switch-user {
-    animation-duration: .45s !important; animation-delay: calc(var(--i, 0) * 60ms) !important; }
 
   /* ---------- history: comparison with the last time ---------- */
   .compare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; max-width: 900px; margin-bottom: 12px; padding: 10px 16px; border-radius: 12px;
