@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { TRAINING_LOG_URL, type Day } from '../data/plan'
-import { commitment, useWorkoutLog } from '../hooks/useWorkoutLog'
+import { commitment, overallCommitment, useWorkoutLog } from '../hooks/useWorkoutLog'
 import { useConfirm } from './Confirm'
+import { DailyRatings, ScoreStrip } from './DayExtras'
 import { ExerciseCard } from './ExerciseCard'
 import { Ring } from './Ring'
 import { buildSession, lastKey, rememberSession, sendSession, type LastWeights, type SyncResult } from '../lib/sheetSync'
@@ -28,7 +29,7 @@ type Props = {
 export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynced }: Props) {
   const ref = useRef<HTMLDialogElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
-  const { log, update, finish } = workoutLog
+  const { log, update, extras, updateExtras, finish } = workoutLog
   const [sync, setSync] = useState<SyncResult | 'sending' | null>(null)
   const confirm = useConfirm()
 
@@ -44,20 +45,23 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
     }
   }, [day])
 
-  const dayScore = day
+  const training = day
     ? Math.round(day.exercises.reduce((s, ex) => s + commitment(log[ex.id], ex.workingSets), 0) / day.exercises.length)
     : 0
+  const dayExtras = (day && extras[day.id]) || {}
+  const missing = [dayExtras.cardio == null && 'cardio', dayExtras.diet == null && 'diet'].filter(Boolean)
 
   const onFinish = async () => {
     if (!day) return
     const ok = await confirm({
       title: 'Finish this workout?',
-      message: "Today's weights become next time's \"Previous weight\" and the fields reset.",
+      message: (missing.length ? `You haven't rated your ${missing.join(' and ')} commitment yet. ` : '')
+        + "Today's weights become next time's \"Previous weight\" and the fields reset.",
       confirmText: 'Finish',
     })
     if (!ok) return
-    const session = buildSession(day, log, last)
-    finish(day.exercises.map((e) => e.id))
+    const session = buildSession(day, log, last, dayExtras)
+    finish(day.id, day.exercises.map((e) => e.id))
     onLastChange(rememberSession(session))
     bodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
     setSync('sending')
@@ -79,13 +83,14 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
           <header className="day-head">
             <h2><small>DAY {day.number}</small>{day.label}</h2>
             <div className="day-score">
-              <Ring value={dayScore} big />
-              <span className="lbl">Day<br />commitment</span>
+              <Ring value={overallCommitment(training, dayExtras.cardio, dayExtras.diet)} big />
+              <span className="lbl">Day<br />total</span>
             </div>
             <button type="button" className="x" onClick={() => ref.current?.close()} aria-label="Close">&times;</button>
           </header>
 
           <div className="day-body" ref={bodyRef}>
+            <ScoreStrip training={training} extras={dayExtras} />
             <div className="panel">
               <div className="ex-head">
                 {HEAD.map((h, i) => <span key={h} className={i ? "h" : "h h-name"} dangerouslySetInnerHTML={{ __html: h }} />)}
@@ -94,6 +99,7 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
                 <ExerciseCard key={ex.id} exercise={ex} entry={log[ex.id]} previous={last[lastKey(day.number, ex.name)]} onChange={(patch) => update(ex.id, patch)} />
               ))}
             </div>
+            <DailyRatings value={dayExtras} onChange={(patch) => updateExtras(day.id, patch)} />
           </div>
 
           {sync && <p className={`sync sync-${sync}`} role="status">{SYNC_TEXT[sync]}</p>}

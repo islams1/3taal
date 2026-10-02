@@ -229,6 +229,29 @@
   .logbtn:hover, .logbtn:focus-visible { background: var(--accent); color: var(--on-accent); outline: none; }
   .finish:hover, .finish:focus-visible { filter: brightness(1.12); outline: none; }
 
+  /* ---------- day breakdown + cardio / diet ratings ---------- */
+  .score-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; max-width: 900px; margin-bottom: 14px;
+    padding: 12px 18px; border-radius: 14px; border: 1px solid var(--line-1); background: var(--card); }
+  .score-item { display: flex; align-items: center; gap: 9px; }
+  .score-item .lbl { font-size: 12px; }
+  .score-item.total { margin-inline-start: auto; padding-inline-start: 18px; border-inline-start: 1px solid var(--line-2); }
+  .score-item.total .lbl { color: var(--text-1); }
+  .ring-empty { background: var(--line-2); }
+  .ring-empty b { color: var(--placeholder); }
+
+  .daily { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; max-width: 900px; margin: 16px 0 6px; }
+  .daily-q { padding: 14px 16px 16px; border-radius: 14px; border: 1px solid var(--line-1); background: var(--card); }
+  .daily-title { display: grid; grid-template-columns: 1fr auto; align-items: baseline; column-gap: 10px; margin-bottom: 12px; }
+  .daily-title h3 { font-weight: 400; font-style: italic; font-size: 19px; color: var(--accent); letter-spacing: .3px; }
+  .daily-title p { grid-column: 1 / -1; grid-row: 2; margin-top: 2px; font: 14px/1.5 Cairo, system-ui, sans-serif; color: var(--muted); text-align: start; }
+  .daily-val { font-weight: 400; font-size: 18px; color: var(--text-1); font-variant-numeric: tabular-nums; }
+  .daily .rate { gap: 5px; }
+  .daily .rate button { height: 40px; font-size: 15px; }
+  .rate.readonly button { cursor: default; }
+  .rate.readonly button:not([aria-checked="true"]) { color: var(--placeholder); }
+  .rate.readonly button:hover { border-color: var(--field-line); }
+  .rate.readonly button:active { transform: none; }
+
   /* ---------- history ("View") ---------- */
   dialog.history { width: min(96vw, 1180px); }
   .history .day-box { min-height: min(70dvh, 640px); }
@@ -406,6 +429,14 @@
     .q legend { font-size: 15px; }
     .rate { grid-template-columns: repeat(5, 1fr); }
     .choice { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 760px) {
+    .score-strip { gap: 10px 14px; padding: 10px 12px; }
+    .score-item .ring { width: 40px; height: 40px; }
+    .score-item .ring b { font-size: 11px; }
+    .score-item.total { margin-inline-start: 0; padding-inline-start: 0; border: 0; width: 100%; padding-top: 8px; border-top: 1px solid var(--line-2); }
+    .daily { grid-template-columns: 1fr; }
+    .daily .rate { grid-template-columns: repeat(5, 1fr); }
   }
   @media (max-width: 640px) {
     .hist-item { grid-template-columns: 1fr auto; grid-template-areas: "day ring" "date ring" "go go"; row-gap: 6px; padding: 12px 14px; }

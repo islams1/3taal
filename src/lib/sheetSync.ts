@@ -1,5 +1,5 @@
 import type { Day } from '../data/plan'
-import { commitment, type ExerciseLog } from '../hooks/useWorkoutLog'
+import { commitment, type DayExtras, type ExerciseLog } from '../hooks/useWorkoutLog'
 
 export type SheetRow = {
   exercise: string
@@ -18,7 +18,13 @@ export type SessionPayload = {
   dayNumber: number
   dayLabel: string
   rows: SheetRow[]
+  /** 1-10 ratings for the day; null/undefined when not answered (and for older sessions) */
+  cardio?: number | null
+  diet?: number | null
 }
+
+/** True when the session holds anything worth saving. */
+export const hasContent = (s: SessionPayload) => s.rows.length > 0 || s.cardio != null || s.diet != null
 
 export type SyncResult = 'sent' | 'queued' | 'not-configured' | 'empty'
 
@@ -37,7 +43,7 @@ const num = (v?: string): number | '' => {
 }
 
 /** One row per exercise the trainee actually filled in. */
-export function buildSession(day: Day, log: Record<string, ExerciseLog>, last: LastWeights): SessionPayload {
+export function buildSession(day: Day, log: Record<string, ExerciseLog>, last: LastWeights, extras: DayExtras = {}): SessionPayload {
   const rows = day.exercises.flatMap((ex): SheetRow[] => {
     const e = log[ex.id]
     if (!e || (!e.cur && !e.done && !e.fail)) return []
@@ -54,7 +60,10 @@ export function buildSession(day: Day, log: Record<string, ExerciseLog>, last: L
       failure: e.fail === 'yes' ? 'Yes' : e.fail === 'no' ? 'No' : '',
     }]
   })
-  return { id: crypto.randomUUID(), date: new Date().toISOString(), dayNumber: day.number, dayLabel: day.label, rows }
+  return {
+    id: crypto.randomUUID(), date: new Date().toISOString(), dayNumber: day.number, dayLabel: day.label, rows,
+    cardio: extras.cardio ?? null, diet: extras.diet ?? null,
+  }
 }
 
 function readQueue(): SessionPayload[] {
@@ -102,7 +111,7 @@ export function flushQueue(): Promise<number> {
 }
 
 export async function sendSession(session: SessionPayload): Promise<SyncResult> {
-  if (!session.rows.length) return 'empty'
+  if (!hasContent(session)) return 'empty'
   if (!SHEET_URL) return 'not-configured'
   writeQueue([...readQueue(), session])
   return (await flushQueue()) === 0 ? 'sent' : 'queued'
@@ -246,5 +255,5 @@ export async function fetchHistory(): Promise<SessionPayload[] | null> {
 }
 
 function addToHistory(session: SessionPayload) {
-  if (session.rows.length) saveHistory(newestFirst([session, ...cachedHistory().filter((s) => s.id !== session.id)]))
+  if (hasContent(session)) saveHistory(newestFirst([session, ...cachedHistory().filter((s) => s.id !== session.id)]))
 }

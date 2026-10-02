@@ -33,12 +33,20 @@ function doPost(e) {
 function saveWorkout(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
   const date = new Date(data.date);
+  const cardio = data.cardio == null ? '' : data.cardio;
+  const diet = data.diet == null ? '' : data.diet;
   const rows = data.rows.map(r => [
     date, 'Day ' + data.dayNumber, data.dayLabel, r.exercise,
-    r.prev, r.cur, r.change, r.done, r.target, r.commitment / 100, r.failure, data.id || '',
+    r.prev, r.cur, r.change, r.done, r.target, r.commitment / 100, r.failure, data.id || '', cardio, diet,
   ]);
-  // column L groups one finished workout's rows into a session (used by the site's "View" history)
-  if (sheet.getRange(1, 12).getValue() === '') sheet.getRange(1, 12).setValue('Session').setFontWeight('bold');
+  // only cardio / diet answered: still record the day on one row
+  if (!rows.length && (cardio !== '' || diet !== '')) {
+    rows.push([date, 'Day ' + data.dayNumber, data.dayLabel, '', '', '', '', '', '', '', '', data.id || '', cardio, diet]);
+  }
+  // L groups one finished workout's rows into a session (the site's "View" history); M/N are the day's ratings
+  ensureHeader(sheet, 12, 'Session');
+  ensureHeader(sheet, 13, 'Cardio /10');
+  ensureHeader(sheet, 14, 'Diet /10');
   if (rows.length) {
     const start = sheet.getLastRow() + 1;
     sheet.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
@@ -46,6 +54,10 @@ function saveWorkout(data) {
     sheet.getRange(start, 10, rows.length, 1).setNumberFormat('0%');
   }
   return { ok: true, added: rows.length };
+}
+
+function ensureHeader(sheet, col, title) {
+  if (sheet.getRange(1, col).getValue() === '') sheet.getRange(1, col).setValue(title).setFontWeight('bold');
 }
 
 function saveCheckin(data) {
@@ -132,13 +144,17 @@ function workoutHistory(ss) {
   const values = ss.getSheets()[0].getDataRange().getValues().slice(1);
   const sessions = {};
   for (const row of values) {
-    const [date, day, label, exercise, prev, cur, change, done, target, commitment, failure, session] = row;
-    if (!exercise) continue;
+    const [date, day, label, exercise, prev, cur, change, done, target, commitment, failure, session, cardio, diet] = row;
+    if (!date) continue;
     const iso = (date instanceof Date ? date : new Date(date)).toISOString();
     const key = session || iso + '|' + day;
     if (!sessions[key]) {
-      sessions[key] = { id: String(key), date: iso, dayNumber: Number(String(day).replace(/\D/g, '')), dayLabel: label, rows: [] };
+      sessions[key] = { id: String(key), date: iso, dayNumber: Number(String(day).replace(/\D/g, '')), dayLabel: label, rows: [],
+        cardio: null, diet: null };
     }
+    if (cardio !== '' && cardio !== undefined) sessions[key].cardio = Number(cardio);
+    if (diet !== '' && diet !== undefined) sessions[key].diet = Number(diet);
+    if (!exercise) continue;
     sessions[key].rows.push({
       exercise: exercise, prev: prev, cur: cur, change: change, done: done, target: target,
       commitment: typeof commitment === 'number' ? Math.round(commitment * 100) : 0,

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { DAYS, type Day, type Exercise } from '../data/plan'
-import type { ExerciseLog } from '../hooks/useWorkoutLog'
+import { overallCommitment, type ExerciseLog } from '../hooks/useWorkoutLog'
 import { cachedHistory, fetchHistory, type SessionPayload, type SheetRow } from '../lib/sheetSync'
+import { DailyRatings, ScoreStrip } from './DayExtras'
 import { ExerciseCard } from './ExerciseCard'
 import { Ring } from './Ring'
 
@@ -33,10 +34,14 @@ function sessionExercises(s: SessionPayload): { day?: Day; items: { ex: Exercise
   return { day, items }
 }
 
-const dayScore = (s: SessionPayload) => {
+/** Training part only: average exercise commitment over the day's plan. */
+const trainingScore = (s: SessionPayload) => {
   const total = DAYS.find((d) => d.number === s.dayNumber)?.exercises.length || s.rows.length || 1
   return Math.round(s.rows.reduce((sum, r) => sum + (Number(r.commitment) || 0), 0) / total)
 }
+
+/** What the list shows: training, cardio and diet together. */
+const dayScore = (s: SessionPayload) => overallCommitment(trainingScore(s), s.cardio, s.diet)
 
 export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null)
@@ -88,7 +93,7 @@ export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => 
               </h2>
               <div className="day-score">
                 <Ring value={dayScore(selected)} big />
-                <span className="lbl">Day<br />commitment</span>
+                <span className="lbl">Day<br />total</span>
               </div>
             </>
           ) : (
@@ -99,6 +104,8 @@ export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => 
 
         <div className="day-body" ref={bodyRef}>
           {selected && detail ? (
+            <>
+            <ScoreStrip training={trainingScore(selected)} extras={{ cardio: selected.cardio, diet: selected.diet }} />
             <div className="panel">
               <div className="ex-head">
                 {HEAD.map((h, i) => <span key={h} className={i ? 'h' : 'h h-name'} dangerouslySetInnerHTML={{ __html: h }} />)}
@@ -113,6 +120,8 @@ export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => 
                 />
               ))}
             </div>
+            <DailyRatings value={{ cardio: selected.cardio, diet: selected.diet }} readOnly />
+            </>
           ) : (
             <>
               <div className="hist-filter" role="tablist" aria-label="Filter by day">
@@ -141,7 +150,11 @@ export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => 
                         <span className="hist-day"><small>DAY {s.dayNumber}</small>{s.dayLabel}</span>
                         <span className="hist-date">
                           {fmtDate(s.date)}
-                          <small>{fmtTime(s.date)} · {s.rows.length}/{total} exercises{ups ? ` · ▲ ${ups} heavier` : ''}</small>
+                          <small>
+                            {fmtTime(s.date)} · {s.rows.length}/{total} exercises{ups ? ` · ▲ ${ups} heavier` : ''}
+                            {s.cardio != null && ` · Cardio ${s.cardio}/10`}
+                            {s.diet != null && ` · Diet ${s.diet}/10`}
+                          </small>
                         </span>
                         <Ring value={score} />
                         <span className="hist-go">View
