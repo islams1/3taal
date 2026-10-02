@@ -6,8 +6,10 @@ import { Stepper } from './Stepper'
 type Props = {
   exercise: Exercise
   entry: ExerciseLog | undefined
-  previous?: { weight: number; date: string }
-  onChange: (patch: ExerciseLog) => void
+  previous?: { weight: number; date?: string }
+  onChange?: (patch: ExerciseLog) => void
+  /** history view: same layout, values shown but not editable */
+  readOnly?: boolean
 }
 
 function Delta({ prev, cur }: { prev?: number; cur?: string }) {
@@ -17,7 +19,7 @@ function Delta({ prev, cur }: { prev?: number; cur?: string }) {
   return <b className={diff > 0 ? 'delta up' : 'delta down'}>{diff > 0 ? `▲ +${diff}` : `▼ ${diff}`}</b>
 }
 
-export function ExerciseCard({ exercise: ex, entry, previous, onChange }: Props) {
+export function ExerciseCard({ exercise: ex, entry, previous, onChange = () => {}, readOnly = false }: Props) {
   const facts: [string, string][] = [
     ['W.U', ex.warmupSets || '–'],
     ['Sets', String(ex.workingSets)],
@@ -54,7 +56,7 @@ export function ExerciseCard({ exercise: ex, entry, previous, onChange }: Props)
         <div className="f">
           <span className="lbl">
             Previous weight
-            {previous && <span className="u">{new Date(previous.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>}
+            {previous?.date && <span className="u">{new Date(previous.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>}
           </span>
           <span className="inp readonly" title="Last session's current weight (from Google Sheet)">
             <output>{previous ? previous.weight : '–'}</output>
@@ -63,27 +65,35 @@ export function ExerciseCard({ exercise: ex, entry, previous, onChange }: Props)
         </div>
 
         <div className="f">
-          <label className="lbl" htmlFor={`${ex.id}c`}>
+          <label className="lbl" htmlFor={readOnly ? undefined : `${ex.id}c`}>
             Current weight <span className="u">kg</span>
             <Delta prev={previous?.weight} cur={entry?.cur} />
           </label>
-          <Stepper id={`${ex.id}c`} label="weight" step={2.5} inputMode="decimal"
-            value={entry?.cur ?? ''} onChange={(cur) => onChange({ cur })} />
+          {readOnly ? (
+            <span className="inp readonly"><output>{entry?.cur || '–'}</output><em>kg</em></span>
+          ) : (
+            <Stepper id={`${ex.id}c`} label="weight" step={2.5} inputMode="decimal"
+              value={entry?.cur ?? ''} onChange={(cur) => onChange({ cur })} />
+          )}
         </div>
 
         <div className="f">
-          <label className="lbl" htmlFor={`${ex.id}s`}>
+          <label className="lbl" htmlFor={readOnly ? undefined : `${ex.id}s`}>
             Sets done <span className="u">/ {ex.workingSets}</span>
           </label>
-          <Stepper id={`${ex.id}s`} label="sets" step={1} inputMode="numeric"
-            value={entry?.done ?? ''} onChange={(done) => onChange({ done })} />
+          {readOnly ? (
+            <span className="inp readonly"><output>{entry?.done || '0'}</output><em>/ {ex.workingSets}</em></span>
+          ) : (
+            <Stepper id={`${ex.id}s`} label="sets" step={1} inputMode="numeric"
+              value={entry?.done ?? ''} onChange={(done) => onChange({ done })} />
+          )}
         </div>
 
         <div className="f">
           <span className="lbl">Reached failure?</span>
-          <div className="yn" role="group" aria-label="Reached failure">
-            <button type="button" data-v="yes" aria-pressed={entry?.fail === 'yes'} onClick={() => setFail('yes')}>YES</button>
-            <button type="button" data-v="no" aria-pressed={entry?.fail === 'no'} onClick={() => setFail('no')}>NO</button>
+          <div className={readOnly ? 'yn readonly' : 'yn'} role="group" aria-label="Reached failure">
+            <button type="button" data-v="yes" aria-pressed={entry?.fail === 'yes'} disabled={readOnly} onClick={() => setFail('yes')}>YES</button>
+            <button type="button" data-v="no" aria-pressed={entry?.fail === 'no'} disabled={readOnly} onClick={() => setFail('no')}>NO</button>
           </div>
         </div>
       </div>

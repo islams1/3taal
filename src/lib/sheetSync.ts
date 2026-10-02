@@ -147,6 +147,7 @@ export function rememberSession(session: SessionPayload): LastWeights {
   const last = cachedLast()
   for (const r of session.rows) if (r.cur !== '') last[lastKey(session.dayNumber, r.exercise)] = { weight: r.cur, date: session.date }
   saveLast(last)
+  addToHistory(session)
   return last
 }
 
@@ -203,4 +204,47 @@ export async function sendCheckin(answers: object, photos: CheckinPhoto[], weigh
   } catch {
     return { result: 'failed' }
   }
+}
+
+// ---- history: every finished workout, for the "View" screen ----
+
+const HISTORY_KEY = 'workout-history-v1'
+
+export function cachedHistory(): SessionPayload[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]')
+  } catch {
+    return []
+  }
+}
+
+function saveHistory(list: SessionPayload[]) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(list))
+  } catch {
+    // storage full or blocked - the sheet still has everything
+  }
+}
+
+const newestFirst = (list: SessionPayload[]) => [...list].sort((a, b) => (a.date < b.date ? 1 : -1))
+
+/** Sheet history merged with sessions finished on this device that may not have uploaded yet. */
+export async function fetchHistory(): Promise<SessionPayload[] | null> {
+  if (!SHEET_URL) return null
+  try {
+    const body = await (await fetch(`${SHEET_URL}?view=history`)).json()
+    if (body.ok !== true || !Array.isArray(body.sessions)) return null
+    const byId = new Map<string, SessionPayload>()
+    for (const s of cachedHistory()) byId.set(s.id, s)
+    for (const s of body.sessions as SessionPayload[]) byId.set(s.id, s)
+    const merged = newestFirst([...byId.values()])
+    saveHistory(merged)
+    return merged
+  } catch {
+    return null
+  }
+}
+
+function addToHistory(session: SessionPayload) {
+  if (session.rows.length) saveHistory(newestFirst([session, ...cachedHistory().filter((s) => s.id !== session.id)]))
 }

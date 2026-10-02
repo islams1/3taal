@@ -35,8 +35,10 @@ function saveWorkout(data) {
   const date = new Date(data.date);
   const rows = data.rows.map(r => [
     date, 'Day ' + data.dayNumber, data.dayLabel, r.exercise,
-    r.prev, r.cur, r.change, r.done, r.target, r.commitment / 100, r.failure,
+    r.prev, r.cur, r.change, r.done, r.target, r.commitment / 100, r.failure, data.id || '',
   ]);
+  // column L groups one finished workout's rows into a session (used by the site's "View" history)
+  if (sheet.getRange(1, 12).getValue() === '') sheet.getRange(1, 12).setValue('Session').setFontWeight('bold');
   if (rows.length) {
     const start = sheet.getLastRow() + 1;
     sheet.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
@@ -92,11 +94,13 @@ function savePhotos(photos, date) {
 }
 
 /**
+ * GET ?view=history → every finished workout (see workoutHistory).
  * GET → latest "Current weight" per exercise (keyed "<day number>|<exercise>")
  * plus the latest check-in weight. Opening the URL in a browser is also a health check.
  */
-function doGet() {
+function doGet(e) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (e && e.parameter && e.parameter.view === 'history') return json({ ok: true, sessions: workoutHistory(ss) });
   const values = ss.getSheets()[0].getDataRange().getValues().slice(1); // skip header row
   const last = {};
   for (const row of values) {
@@ -121,6 +125,27 @@ function doGet() {
     }
   }
   return json({ ok: true, sheet: ss.getName(), last: out, lastCheckin: lastCheckin });
+}
+
+/** Every finished workout, newest first, with its exercise rows - as logged. */
+function workoutHistory(ss) {
+  const values = ss.getSheets()[0].getDataRange().getValues().slice(1);
+  const sessions = {};
+  for (const row of values) {
+    const [date, day, label, exercise, prev, cur, change, done, target, commitment, failure, session] = row;
+    if (!exercise) continue;
+    const iso = (date instanceof Date ? date : new Date(date)).toISOString();
+    const key = session || iso + '|' + day;
+    if (!sessions[key]) {
+      sessions[key] = { id: String(key), date: iso, dayNumber: Number(String(day).replace(/\D/g, '')), dayLabel: label, rows: [] };
+    }
+    sessions[key].rows.push({
+      exercise: exercise, prev: prev, cur: cur, change: change, done: done, target: target,
+      commitment: typeof commitment === 'number' ? Math.round(commitment * 100) : 0,
+      failure: failure,
+    });
+  }
+  return Object.keys(sessions).map(k => sessions[k]).sort((a, b) => (a.date < b.date ? 1 : -1));
 }
 
 function num(v) {
