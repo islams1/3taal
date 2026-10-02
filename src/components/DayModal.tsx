@@ -9,14 +9,14 @@ import { Ring } from './Ring'
 import { buildSession, lastKey, rememberSession, sendSession, type LastWeights, type SyncResult } from '../lib/sheetSync'
 
 const SYNC_TEXT: Record<SyncResult | 'sending', string> = {
-  sending: 'Saving to Google Sheet…',
-  sent: '✓ Saved to Google Sheet',
-  queued: 'No connection – saved here, will upload automatically',
-  'not-configured': 'Saved on this device (Google Sheet not connected yet)',
-  empty: 'Nothing filled in – nothing to save',
+  sending: 'بيتحفظ في الشيت…',
+  sent: '✓ اتحفظ في الشيت',
+  queued: 'مفيش نت – اتحفظ على الموبايل وهيترفع لوحده لما النت يرجع',
+  'not-configured': 'اتحفظ على الجهاز ده بس (الشيت مش متوصل)',
+  empty: 'مفيش حاجة متسجلة – مفيش حاجة تتحفظ',
 }
 
-const HEAD = ['Workout<br>Name', 'W.U<br>Sets', 'Working<br>Sets', 'Reps', 'RIR', 'Rest', 'Workout<br>Video']
+export const HEAD = ['التمرين', 'إحماء', 'مجاميع', 'عدات', 'RIR', 'راحة', 'فيديو']
 
 type Props = {
   day: Day | null
@@ -50,15 +50,15 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
     ? Math.round(day.exercises.reduce((s, ex) => s + commitment(log[ex.id], ex.workingSets), 0) / day.exercises.length)
     : 0
   const dayExtras = (day && extras[day.id]) || {}
-  const missing = [dayExtras.cardio == null && 'cardio', dayExtras.diet == null && 'diet'].filter(Boolean)
+  const missing = [dayExtras.cardio == null && 'الكارديو', dayExtras.diet == null && 'الدايت'].filter(Boolean)
 
   const onFinish = async () => {
     if (!day) return
     const ok = await confirm({
-      title: 'Finish this workout?',
-      message: (missing.length ? `You haven't rated your ${missing.join(' and ')} commitment yet. ` : '')
-        + "Today's weights become next time's \"Previous weight\" and the fields reset.",
-      confirmText: 'Finish',
+      title: 'تخلّص التمرين؟',
+      message: (missing.length ? `لسه ما قيّمتش التزامك ب${missing.join(' و')}. ` : '')
+        + 'أوزان النهارده هتبقى "الوزن السابق" المرة الجاية، والخانات هتتمسح.',
+      confirmText: 'خلّص',
     })
     if (!ok) return
     const session = buildSession(day, log, last, dayExtras)
@@ -75,7 +75,8 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
     <dialog
       ref={ref}
       className="day"
-      aria-label={day ? `Day ${day.number}: ${day.label}` : undefined}
+      dir="rtl"
+      aria-label={day ? `اليوم ${day.number}: ${day.label}` : undefined}
       onClose={onClose}
       onClick={(e) => e.target === e.currentTarget && ref.current?.close()}
     >
@@ -85,16 +86,16 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
             <h2><small>DAY {day.number}</small>{day.label}</h2>
             <div className="day-score">
               <Ring value={overallCommitment(training, dayExtras.cardio, dayExtras.diet)} big />
-              <span className="lbl">Day<br />total</span>
+              <span className="lbl">إجمالي<br />اليوم</span>
             </div>
-            <button type="button" className="x" onClick={() => ref.current?.close()} aria-label="Close">&times;</button>
+            <button type="button" className="x" onClick={() => ref.current?.close()} aria-label="اقفل">&times;</button>
           </header>
 
           <div className="day-body" ref={bodyRef}>
             <ScoreStrip training={training} extras={dayExtras} />
             <div className="panel">
               <div className="ex-head">
-                {HEAD.map((h, i) => <span key={h} className={i ? "h" : "h h-name"} dangerouslySetInnerHTML={{ __html: h }} />)}
+                {HEAD.map((h, i) => <span key={h} className={i ? 'h' : 'h h-name'}>{h}</span>)}
               </div>
               {day.exercises.map((ex) => (
                 <ExerciseCard key={ex.id} exercise={ex} entry={log[ex.id]} previous={last[lastKey(day.number, ex.name)]} onChange={(patch) => update(ex.id, patch)} />
@@ -105,8 +106,8 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
 
           {sync && <p className={`sync sync-${sync}`} role="status">{SYNC_TEXT[sync]}</p>}
           <footer className="day-foot">
-            <button type="button" className="finish" onClick={onFinish}>Finish workout</button>
-            <a className="logbtn" href={TRAINING_LOG_URL} target="_blank" rel="noopener">TRAINING LOG</a>
+            <button type="button" className="finish" onClick={onFinish}>خلّص التمرين</button>
+            <a className="logbtn" href={TRAINING_LOG_URL} target="_blank" rel="noopener">سجل التدريب</a>
           </footer>
         </div>
       )}

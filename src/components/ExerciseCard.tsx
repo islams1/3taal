@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import type { Exercise } from '../data/plan'
 import { commitment, type ExerciseLog, type Failure } from '../hooks/useWorkoutLog'
 import { Ring } from './Ring'
@@ -12,37 +13,72 @@ type Props = {
   readOnly?: boolean
 }
 
+const dateFmt = (iso: string) => new Date(iso).toLocaleDateString('ar-EG-u-nu-latn', { day: 'numeric', month: 'short' })
+
 function Delta({ prev, cur }: { prev?: number; cur?: string }) {
   const p = prev ?? NaN, c = parseFloat(cur ?? '')
   if (isNaN(p) || isNaN(c) || p === c) return null
   const diff = +(c - p).toFixed(2)
-  return <b className={diff > 0 ? 'delta up' : 'delta down'}>{diff > 0 ? `▲ +${diff}` : `▼ ${diff}`}</b>
+  return <b className={diff > 0 ? 'delta up' : 'delta down'} dir="ltr">{diff > 0 ? `▲ +${diff}` : `▼ ${diff}`}</b>
 }
+
+const failText = (f?: Failure) => (f === 'yes' ? 'فيلر' : f === 'no' ? 'من غير فيلر' : null)
 
 export function ExerciseCard({ exercise: ex, entry, previous, onChange = () => {}, readOnly = false }: Props) {
   const facts: [string, string][] = [
-    ['W.U', ex.warmupSets || '–'],
-    ['Sets', String(ex.workingSets)],
-    ['Reps', ex.reps],
+    ['إحماء', ex.warmupSets || '–'],
+    ['مجاميع', String(ex.workingSets)],
+    ['عدات', ex.reps.replace(/\s*reps?/i, '')],
     ['RIR', ex.rir || '–'],
-    ['Rest', ex.rest],
+    ['راحة', ex.rest.replace('min', 'د')],
   ]
   const setFail = (v: Failure) => onChange({ fail: entry?.fail === v ? null : v })
   const pct = commitment(entry, ex.workingSets)
+  const complete = pct >= 100
+
+  // a finished exercise folds into one line so the next one is in view; tap to reopen
+  const [open, setOpen] = useState(readOnly || !complete)
+  const wasComplete = useRef(complete)
+  useEffect(() => {
+    if (readOnly) return
+    if (complete && !wasComplete.current) {
+      wasComplete.current = true
+      const t = setTimeout(() => setOpen(false), 700) // let the ring reach 100% first
+      return () => clearTimeout(t)
+    }
+    if (!complete) setOpen(true)
+    wasComplete.current = complete
+  }, [complete, readOnly])
+
+  if (!open) {
+    const parts = [entry?.cur ? `${entry.cur} كجم` : null, `${entry?.done || 0}/${ex.workingSets} مجاميع`, failText(entry?.fail)].filter(Boolean)
+    return (
+      <article className="ex complete folded">
+        <button type="button" className="ex-fold" onClick={() => setOpen(true)} aria-expanded="false">
+          <span className="fold-check" aria-hidden="true">✓</span>
+          <span className="c-name" dir="ltr">{ex.name}</span>
+          <span className="fold-sum">{parts.join(' · ')}</span>
+          <span className="fold-edit">تعديل</span>
+        </button>
+      </article>
+    )
+  }
 
   return (
-    <article className={pct >= 100 ? 'ex complete' : 'ex'}>
+    <article className={complete ? 'ex complete' : 'ex'}>
       <div className="ex-main">
-        <h3 className="c-name">{ex.name}</h3>
+        <h3 className="c-name" dir="ltr">{ex.name}</h3>
         {facts.map(([label, value]) => (
-          <span key={label} className="cell">{value}</span>
+          <span key={label} className="cell"><bdi dir="ltr">{value}</bdi></span>
         ))}
-        <a className="play" href={ex.video} target="_blank" rel="noopener" aria-label={`Watch ${ex.name} video`}>
-          <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3 2l5 3-5 3z" /></svg>
-        </a>
+        {ex.video ? (
+          <a className="play" href={ex.video} target="_blank" rel="noopener" aria-label={`فيديو ${ex.name}`}>
+            <svg viewBox="0 0 10 10" aria-hidden="true"><path d="M3 2l5 3-5 3z" /></svg>
+          </a>
+        ) : <span />}
         <div className="chips">
           {facts.map(([label, value]) => (
-            <span key={label}><b>{label}</b>{value}</span>
+            <span key={label}><b>{label}</b><bdi dir="ltr">{value}</bdi></span>
           ))}
         </div>
       </div>
@@ -50,50 +86,58 @@ export function ExerciseCard({ exercise: ex, entry, previous, onChange = () => {
       <div className="ex-track">
         <div className="f f-commit">
           <Ring value={pct} />
-          <span className="lbl">Commitment</span>
+          <span className="lbl">الالتزام</span>
+          {!readOnly && complete && (
+            <button type="button" className="fold-btn" onClick={() => setOpen(false)}>اقفل ✓</button>
+          )}
         </div>
 
         <div className="f">
           <span className="lbl">
-            Previous weight
-            {previous?.date && <span className="u">{new Date(previous.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}</span>}
+            الوزن السابق
+            {previous?.date && <span className="u">{dateFmt(previous.date)}</span>}
           </span>
-          <span className="inp readonly" title="Last session's current weight (from Google Sheet)">
+          <span className="inp readonly" title="الوزن الحالي من آخر مرة">
             <output>{previous ? previous.weight : '–'}</output>
-            <em>kg</em>
+            <em>كجم</em>
           </span>
         </div>
 
         <div className="f">
           <label className="lbl" htmlFor={readOnly ? undefined : `${ex.id}c`}>
-            Current weight <span className="u">kg</span>
+            الوزن الحالي <span className="u">كجم</span>
             <Delta prev={previous?.weight} cur={entry?.cur} />
+            {!readOnly && previous && !entry?.cur && (
+              <button type="button" className="same-btn" onClick={() => onChange({ cur: String(previous.weight) })}>
+                زي آخر مرة
+              </button>
+            )}
           </label>
           {readOnly ? (
-            <span className="inp readonly"><output>{entry?.cur || '–'}</output><em>kg</em></span>
+            <span className="inp readonly"><output>{entry?.cur || '–'}</output><em>كجم</em></span>
           ) : (
-            <Stepper id={`${ex.id}c`} label="weight" step={2.5} inputMode="decimal"
+            <Stepper id={`${ex.id}c`} label="الوزن" step={2.5} inputMode="decimal" base={previous?.weight}
               value={entry?.cur ?? ''} onChange={(cur) => onChange({ cur })} />
           )}
         </div>
 
         <div className="f">
           <label className="lbl" htmlFor={readOnly ? undefined : `${ex.id}s`}>
-            Sets done <span className="u">/ {ex.workingSets}</span>
+            المجاميع اللي لعبتها <span className="u">من {ex.workingSets}</span>
           </label>
           {readOnly ? (
             <span className="inp readonly"><output>{entry?.done || '0'}</output><em>/ {ex.workingSets}</em></span>
           ) : (
-            <Stepper id={`${ex.id}s`} label="sets" step={1} inputMode="numeric"
+            <Stepper id={`${ex.id}s`} label="المجاميع" step={1} inputMode="numeric"
               value={entry?.done ?? ''} onChange={(done) => onChange({ done })} />
           )}
         </div>
 
         <div className="f">
-          <span className="lbl">Reached failure?</span>
-          <div className={readOnly ? 'yn readonly' : 'yn'} role="group" aria-label="Reached failure">
-            <button type="button" data-v="yes" aria-pressed={entry?.fail === 'yes'} disabled={readOnly} onClick={() => setFail('yes')}>YES</button>
-            <button type="button" data-v="no" aria-pressed={entry?.fail === 'no'} disabled={readOnly} onClick={() => setFail('no')}>NO</button>
+          <span className="lbl">وصلت للفيلر؟</span>
+          <div className={readOnly ? 'yn readonly' : 'yn'} role="group" aria-label="وصلت للفيلر؟">
+            <button type="button" data-v="yes" aria-pressed={entry?.fail === 'yes'} disabled={readOnly} onClick={() => setFail('yes')}>نعم</button>
+            <button type="button" data-v="no" aria-pressed={entry?.fail === 'no'} disabled={readOnly} onClick={() => setFail('no')}>لا</button>
           </div>
         </div>
       </div>

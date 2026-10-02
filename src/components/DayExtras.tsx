@@ -4,8 +4,8 @@ import { Ring } from './Ring'
 
 const TEN = Array.from({ length: 10 }, (_, i) => i + 1)
 const QUESTIONS: { key: keyof DayExtras; title: string; ar: string }[] = [
-  { key: 'cardio', title: 'Cardio commitment', ar: 'التزامك بالكارديو النهارده كام من ١٠؟' },
-  { key: 'diet', title: 'Diet commitment', ar: 'التزامك بالدايت النهارده كام من ١٠؟' },
+  { key: 'cardio', title: 'الالتزام بالكارديو', ar: 'التزامك بالكارديو النهارده كام من ١٠؟' },
+  { key: 'diet', title: 'الالتزام بالدايت', ar: 'التزامك بالدايت النهارده كام من ١٠؟' },
 ]
 
 const pct = (v?: number | null) => (v == null ? null : v * 10)
@@ -13,12 +13,12 @@ const pct = (v?: number | null) => (v == null ? null : v * 10)
 /** Training / cardio / diet percentages side by side, plus the overall day score. */
 export function ScoreStrip({ training, extras }: { training: number; extras: DayExtras }) {
   const items: [string, number | null][] = [
-    ['Training', training],
-    ['Cardio', pct(extras.cardio)],
-    ['Diet', pct(extras.diet)],
+    ['التمرين', training],
+    ['الكارديو', pct(extras.cardio)],
+    ['الدايت', pct(extras.diet)],
   ]
   return (
-    <div className="score-strip" aria-label="Commitment breakdown">
+    <div className="score-strip" aria-label="تفاصيل الالتزام">
       {items.map(([label, v]) => (
         <div key={label} className={v == null ? 'score-item empty' : 'score-item'}>
           {v == null ? <span className="ring ring-empty"><b>–</b></span> : <Ring value={v} />}
@@ -27,7 +27,7 @@ export function ScoreStrip({ training, extras }: { training: number; extras: Day
       ))}
       <div className="score-item total">
         <Ring value={overallCommitment(training, extras.cardio, extras.diet)} big />
-        <span className="lbl">Day total</span>
+        <span className="lbl">إجمالي اليوم</span>
       </div>
     </div>
   )
@@ -45,8 +45,8 @@ export function DailyRatings({ value, onChange, readOnly = false }: {
         <div key={q.key} className="daily-q">
           <div className="daily-title">
             <h3>{q.title}</h3>
-            <p lang="ar" dir="rtl">{q.ar}</p>
-            <b className="daily-val">{value[q.key] != null ? `${value[q.key]} / 10` : '– / 10'}</b>
+            <p>{q.ar}</p>
+            <b className="daily-val" dir="ltr">{value[q.key] != null ? `${value[q.key]} / 10` : '– / 10'}</b>
           </div>
           <div className={readOnly ? 'rate readonly' : 'rate'} role="radiogroup" aria-label={q.title}>
             {TEN.map((n) => (

@@ -464,3 +464,100 @@
     .daynav button:hover i, .daynav button:focus-visible i { color: var(--on-accent); }
     .bolt { height: 42vh; }
   }
+
+  /* =====================================================================
+     Arabic interface: Cairo for labels, numbers and buttons (Impact stays
+     for headings and exercise names), right-to-left popups
+     ===================================================================== */
+  body { font-family: Impact, "Anton", Cairo, "Haettenschweiler", "Arial Narrow Bold", sans-serif; }
+  .lbl, .h, .ex-main > .cell, .chips span, .inp input, .inp output, .inp em, .yn button, .logbtn, .finish, .sync,
+  .daily-title h3, .h-date, .hist-msg, .hist-date, .hist-go, .confirm-box h2, .confirm-box p, .delta {
+    font-family: Cairo, system-ui, sans-serif; font-style: normal; }
+  .hist-filter button { font-style: normal; }
+  .lbl { text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; white-space: normal; flex-wrap: wrap; row-gap: 2px; }
+  .h { font-weight: 700; font-size: 12.5px; }
+  .ex-main > .cell { font-weight: 700; font-size: 14.5px; }
+  .inp input, .inp output { font-weight: 700; }
+  .yn button { font-weight: 700; letter-spacing: 0; }
+  .logbtn, .finish { font-weight: 700; letter-spacing: 0; }
+  .daily-title h3 { font-weight: 700; font-size: 17px; }
+  .confirm-box h2 { font-weight: 700; font-size: 22px; letter-spacing: 0; }
+  .hist-date { font-weight: 700; font-size: 15px; letter-spacing: 0; }
+  .hist-go { font-weight: 700; font-size: 14px; }
+  .chips span b { font-style: normal; font-weight: 700; margin-right: 0; margin-inline-end: 5px; }
+  .delta { margin-left: 0; margin-inline-start: auto; font-weight: 700; }
+
+  [dir="rtl"] .h-name, [dir="rtl"] .ex-main .c-name { text-align: right; padding-left: 0; }
+  [dir="rtl"] .hist-item { text-align: right; }
+  [dir="rtl"] .panel::before { clip-path: polygon(44px 0, 100% 0, 100% 100%, 0 100%, 0 44px); }
+  [dir="rtl"] .panel::after { clip-path: polygon(43.4px 0, 100% 0, 100% 100%, 0 100%, 0 43.4px); }
+  @media (max-width: 760px) {
+    [dir="rtl"] .panel::before { clip-path: polygon(26px 0, 100% 0, 100% 100%, 0 100%, 0 26px); }
+    [dir="rtl"] .panel::after { clip-path: polygon(25.4px 0, 100% 0, 100% 100%, 0 100%, 0 25.4px); }
+    [dir="rtl"] .ex-main .c-name { padding-right: 0; padding-left: 8px; }
+  }
+
+  /* ---------- finished exercise folded to one line ---------- */
+  .ex.folded { padding: 8px 0; }
+  .ex-fold { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 10px 14px; border-radius: 12px; cursor: pointer;
+    border: 1px solid rgba(34,197,94,.45); background: rgba(34,197,94,.07); color: inherit; text-align: start; transition: background .15s; }
+  .ex-fold:hover, .ex-fold:focus-visible { background: rgba(34,197,94,.13); outline: none; }
+  .fold-check { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--green); color: #04140a; font: 700 15px/1 Arial, sans-serif; }
+  .ex-fold .c-name { font-size: 16px; }
+  .fold-sum { flex: 1; min-width: 140px; color: var(--muted); font: 600 13px Cairo, sans-serif; }
+  .fold-edit { font: 700 13px Cairo, sans-serif; color: var(--accent); }
+  .fold-btn, .same-btn { margin-inline-start: auto; padding: 3px 10px; border-radius: 999px; background: transparent; cursor: pointer;
+    font: 700 11.5px Cairo, sans-serif; transition: background .15s, color .15s; }
+  .fold-btn { border: 1px solid var(--green); color: var(--green); }
+  .fold-btn:hover, .fold-btn:focus-visible { background: var(--green); color: #04140a; outline: none; }
+  .same-btn { border: 1px solid var(--accent); color: var(--accent); }
+  .same-btn:hover, .same-btn:focus-visible { background: var(--accent); color: var(--on-accent); outline: none; }
+
+  /* ---------- next / unfinished day on the landing ---------- */
+  .daynav button { position: relative; }
+  .daynav .badge { position: absolute; top: -10px; inset-inline-end: 12px; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+    font: 700 11px/1.3 Cairo, sans-serif; font-style: normal; letter-spacing: 0; box-shadow: 0 4px 12px rgba(0,0,0,.4); }
+  .badge.next { background: var(--accent); color: var(--on-accent); }
+  .badge.started { background: var(--amber); color: #2a1a00; }
+  .daynav button.is-next { background: rgba(var(--accent-rgb), .14); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .22), 0 8px 24px rgba(var(--accent-rgb), .2); }
+
+  /* ---------- who is using the site ---------- */
+  .login { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(100%, 580px); }
+  .login-q { font: 600 16px Cairo, sans-serif; color: var(--muted); animation: rise .7s cubic-bezier(.2,.7,.2,1) 2.8s both; }
+  .login-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; width: 100%; }
+  .login-btn { display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 18px; cursor: pointer; text-align: start; color: inherit;
+    border: 2px solid var(--accent); background: rgba(var(--shade-rgb), .55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+    transition: transform .25s cubic-bezier(.2,.7,.2,1), background .2s, box-shadow .25s;
+    animation: rise .7s cubic-bezier(.2,.7,.2,1) calc(2.95s + var(--i) * 120ms) both; }
+  .login-btn.shady { border-color: var(--line-3); }
+  .login-btn:hover, .login-btn:focus-visible { transform: translateY(-3px); background: var(--accent-soft); outline: none; box-shadow: 0 12px 30px rgba(var(--accent-rgb), .25); }
+  .login-avatar { flex: none; width: 50px; height: 50px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--accent); color: var(--on-accent); }
+  .login-avatar svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .login-btn.shady .login-avatar { background: var(--field); color: var(--accent); border: 1px solid var(--accent); }
+  .login-text b { display: block; font: 700 22px/1.3 Cairo, sans-serif; }
+  .login-text small { font: 500 13px/1.4 Cairo, sans-serif; color: var(--text-3); }
+  .switch-user { margin-top: -6px; background: none; border: 0; cursor: pointer; color: var(--text-3); font: 500 13px Cairo, sans-serif;
+    animation: rise .7s cubic-bezier(.2,.7,.2,1) 3.6s both; }
+  .switch-user u { color: var(--accent); text-underline-offset: 3px; }
+  .logout { flex: none; padding: 8px 18px; border-radius: 999px; cursor: pointer; font: 700 14px Cairo, sans-serif; color: var(--text-1);
+    border: 1px solid var(--field-line); background: var(--field); transition: background .15s, border-color .15s; }
+  .logout:hover, .logout:focus-visible { border-color: var(--accent); background: var(--accent-soft); outline: none; }
+  /* picked during this visit: show the buttons right away instead of after the intro */
+  .landing.entered .daynav button, .landing.entered .landing-actions > *, .landing.entered .switch-user {
+    animation-duration: .45s !important; animation-delay: calc(var(--i, 0) * 60ms) !important; }
+
+  /* ---------- history: comparison with the last time ---------- */
+  .compare { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; max-width: 900px; margin-bottom: 12px; padding: 10px 16px; border-radius: 12px;
+    background: rgba(var(--accent-rgb), .07); border: 1px solid rgba(var(--accent-rgb), .3); font: 600 14px Cairo, sans-serif; }
+  .compare.first { color: var(--muted); }
+  .compare-title { color: var(--accent); font-weight: 700; }
+  .compare-weights { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .diff { font: 700 13px Cairo, sans-serif; }
+  .diff.up { color: #4ade80; } .diff.down { color: #f87171; } .diff.same { color: var(--text-3); }
+  .hist-score { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+
+  @media (max-width: 640px) {
+    .login-btns { grid-template-columns: 1fr; }
+    .hist-item .hist-score { grid-area: ring; }
+  }
