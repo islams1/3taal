@@ -3,6 +3,7 @@ import { DAYS, type Day, type Exercise } from '../data/plan'
 import { overallCommitment, type ExerciseLog } from '../hooks/useWorkoutLog'
 import { cachedHistory, fetchHistory, type SessionPayload, type SheetRow } from '../lib/sheetSync'
 import { DailyRatings, ScoreStrip } from './DayExtras'
+import { assetUrl } from '../lib/assetUrl'
 import { ExerciseCard } from './ExerciseCard'
 import { Ring } from './Ring'
 
@@ -47,7 +48,7 @@ export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => 
   const ref = useRef<HTMLDialogElement>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const [sessions, setSessions] = useState<SessionPayload[]>(cachedHistory)
-  const [state, setState] = useState<'loading' | 'ready' | 'offline'>('loading')
+  const [state, setState] = useState<'loading' | 'ready' | 'offline' | 'outdated'>('loading')
   const [filter, setFilter] = useState<number | null>(null)
   const [selected, setSelected] = useState<SessionPayload | null>(null)
 
@@ -60,8 +61,8 @@ export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => 
       setSessions(cachedHistory())
       setState('loading')
       fetchHistory().then((list) => {
-        if (list) setSessions(list)
-        setState(list ? 'ready' : 'offline')
+        if (Array.isArray(list)) setSessions(list)
+        setState(Array.isArray(list) ? 'ready' : list === 'outdated' ? 'outdated' : 'offline')
       })
     } else if (!open && dlg.open) {
       dlg.close()
@@ -75,7 +76,7 @@ export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => 
 
   const shown = useMemo(() => sessions.filter((s) => filter === null || s.dayNumber === filter), [sessions, filter])
   const detail = selected ? sessionExercises(selected) : null
-  const photo = detail?.day ? `url(${import.meta.env.BASE_URL}${detail.day.photo})` : undefined
+  const photo = detail?.day ? `url(${assetUrl(detail.day.photo)})` : undefined
 
   return (
     <dialog ref={ref} className="day history" aria-label="Workout history" onClose={onClose}
@@ -135,6 +136,12 @@ export function HistoryModal({ open, onClose }: { open: boolean; onClose: () => 
 
               {state === 'loading' && !sessions.length && <p className="hist-msg">Loading your workouts…</p>}
               {state === 'offline' && <p className="hist-msg warn">Couldn't reach Google Sheet – showing workouts saved on this device.</p>}
+              {state === 'outdated' && (
+                <p className="hist-msg warn">
+                  The Google Sheet script needs updating to show history (Apps Script → Deploy → Manage deployments → New version).
+                  Showing workouts saved on this device.
+                </p>
+              )}
               {state !== 'loading' && !shown.length && (
                 <p className="hist-msg">No finished workouts yet{filter ? ' for this day' : ''}. Press <b>Finish workout</b> after a session and it shows up here.</p>
               )}

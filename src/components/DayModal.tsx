@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { TRAINING_LOG_URL, type Day } from '../data/plan'
 import { commitment, overallCommitment, useWorkoutLog } from '../hooks/useWorkoutLog'
+import { assetUrl } from '../lib/assetUrl'
 import { useConfirm } from './Confirm'
 import { DailyRatings, ScoreStrip } from './DayExtras'
 import { ExerciseCard } from './ExerciseCard'
@@ -79,7 +80,7 @@ export function DayModal({ day, onClose, workoutLog, last, onLastChange, onSynce
       onClick={(e) => e.target === e.currentTarget && ref.current?.close()}
     >
       {day && (
-        <div className="day-box" style={{ '--photo': `url(${import.meta.env.BASE_URL}${day.photo})` } as CSSProperties}>
+        <div className="day-box" style={{ '--photo': `url(${assetUrl(day.photo)})` } as CSSProperties}>
           <header className="day-head">
             <h2><small>DAY {day.number}</small>{day.label}</h2>
             <div className="day-score">

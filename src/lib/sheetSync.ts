@@ -237,12 +237,16 @@ function saveHistory(list: SessionPayload[]) {
 
 const newestFirst = (list: SessionPayload[]) => [...list].sort((a, b) => (a.date < b.date ? 1 : -1))
 
-/** Sheet history merged with sessions finished on this device that may not have uploaded yet. */
-export async function fetchHistory(): Promise<SessionPayload[] | null> {
+/**
+ * Sheet history merged with sessions finished on this device that may not have uploaded yet.
+ * 'outdated' = the sheet answered but its Apps Script predates the history endpoint.
+ */
+export async function fetchHistory(): Promise<SessionPayload[] | 'outdated' | null> {
   if (!SHEET_URL) return null
   try {
     const body = await (await fetch(`${SHEET_URL}?view=history`)).json()
-    if (body.ok !== true || !Array.isArray(body.sessions)) return null
+    if (body.ok === true && !Array.isArray(body.sessions)) return 'outdated'
+    if (body.ok !== true) return null
     const byId = new Map<string, SessionPayload>()
     for (const s of cachedHistory()) byId.set(s.id, s)
     for (const s of body.sessions as SessionPayload[]) byId.set(s.id, s)
