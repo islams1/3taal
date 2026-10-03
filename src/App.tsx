@@ -7,23 +7,32 @@ import { HistoryModal } from './components/HistoryModal'
 import { Login, type Role } from './components/Login'
 import { DAYS, type Day } from './data/plan'
 import { useWorkoutLog } from './hooks/useWorkoutLog'
-import { cachedHistory, cachedLast, fetchHistory, fetchLast, flushQueue, type LastWeights, type SessionPayload } from './lib/sheetSync'
+import { cachedHistory, cachedLast, checkPin, fetchHistory, fetchLast, flushQueue, setPin, type LastWeights, type SessionPayload } from './lib/sheetSync'
 
 const ROLE_KEY = 'app-user-v1'
+const PIN_KEY = 'app-pin-v1'
 
 function readRole(): Role | null {
   try {
     const r = localStorage.getItem(ROLE_KEY)
-    return r === 'islam' || r === 'shady' ? r : null
+    if (r !== 'islam' && r !== 'shady') return null
+    setPin(localStorage.getItem(PIN_KEY) ?? '') // before any request goes out
+    return r
   } catch {
     return null
   }
 }
 
-function saveRole(r: Role | null) {
+function saveRole(r: Role | null, pin = '') {
+  setPin(pin)
   try {
-    if (r) localStorage.setItem(ROLE_KEY, r)
-    else localStorage.removeItem(ROLE_KEY)
+    if (r) {
+      localStorage.setItem(ROLE_KEY, r)
+      localStorage.setItem(PIN_KEY, pin)
+    } else {
+      localStorage.removeItem(ROLE_KEY)
+      localStorage.removeItem(PIN_KEY)
+    }
   } catch {
     // storage blocked - the choice just lasts for this visit
   }
@@ -51,6 +60,14 @@ export default function App() {
     return () => removeEventListener('online', sync)
   }, [])
 
+  // a saved sign-in whose password no longer works (passwords added or changed) goes back to the login
+  useEffect(() => {
+    if (!role) return
+    let stored = ''
+    try { stored = localStorage.getItem(PIN_KEY) ?? '' } catch { /* storage blocked */ }
+    checkPin(stored).then((r) => { if (r === null) logout() }, () => { /* offline: keep working from this device */ })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // previous weights may have been logged from another device - refresh when a day opens
   useEffect(() => {
     if (openDay) refreshLast()
@@ -66,11 +83,12 @@ export default function App() {
     return new Set(ids)
   }, [workoutLog])
 
-  const pick = (r: Role) => {
-    saveRole(r)
+  const pick = (r: Role, pin: string) => {
+    saveRole(r, pin)
     setRole(r)
     replay()
     if (r === 'shady') setHistoryOpen(true)
+    else { refreshLast(); refreshHistory() }
   }
   const logout = () => {
     saveRole(null)
@@ -81,7 +99,8 @@ export default function App() {
 
   return (
     <>
-      <main className="landing" key={visit}>
+      {/* first visit plays the full intro; coming back replays a quick version */}
+      <main className={visit ? 'landing quick' : 'landing'} key={visit}>
         <Hero />
         {role === null && <Login onPick={pick} />}
 

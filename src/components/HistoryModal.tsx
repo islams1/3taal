@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { DAYS, type Day, type Exercise } from '../data/plan'
 import { overallCommitment, type ExerciseLog } from '../hooks/useWorkoutLog'
 import { assetUrl } from '../lib/assetUrl'
-import { cachedHistory, fetchHistory, type SessionPayload, type SheetRow } from '../lib/sheetSync'
+import { sessionTrainingScore } from '../lib/score'
+import { cachedHistory, fetchCheckins, fetchHistory, type CheckinRecord, type SessionPayload, type SheetRow } from '../lib/sheetSync'
+import { CheckinDetail, CheckinList } from './CheckinHistory'
 import { HEAD } from './DayModal'
 import { DailyRatings, ScoreStrip } from './DayExtras'
 import { ExerciseCard } from './ExerciseCard'
@@ -16,6 +18,7 @@ const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString(LOCALE, { hour
 
 const toEntry = (r: SheetRow): ExerciseLog => ({
   cur: r.cur === '' ? '' : String(r.cur),
+  reps: r.reps === '' || r.reps == null ? '' : String(r.reps),
   done: r.done === '' ? '' : String(r.done),
   fail: r.failure === 'Yes' ? 'yes' : r.failure === 'No' ? 'no' : null,
 })
@@ -36,14 +39,12 @@ function sessionExercises(s: SessionPayload): { day?: Day; items: { ex: Exercise
   return { day, items }
 }
 
-/** Training part only: average exercise commitment over the day's plan. */
-const trainingScore = (s: SessionPayload) => {
-  const total = DAYS.find((d) => d.number === s.dayNumber)?.exercises.length || s.rows.length || 1
-  return Math.round(s.rows.reduce((sum, r) => sum + (Number(r.commitment) || 0), 0) / total)
-}
+/** Training part only: average exercise score over the day's plan. */
+export const trainingScore = (s: SessionPayload) =>
+  sessionTrainingScore(s, DAYS.find((d) => d.number === s.dayNumber)?.exercises.length)
 
 /** What the list shows: training, cardio and diet together. */
-const dayScore = (s: SessionPayload) => overallCommitment(trainingScore(s), s.cardio, s.diet)
+export const dayScore = (s: SessionPayload) => overallCommitment(trainingScore(s), s.cardio, s.diet)
 
 /** Same day done before this one (list is newest first). */
 const previousOf = (s: SessionPayload, all: SessionPayload[]) =>
@@ -95,6 +96,11 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
   const [state, setState] = useState<'loading' | 'ready' | 'offline' | 'outdated'>('loading')
   const [filter, setFilter] = useState<number | null>(null)
   const [selected, setSelected] = useState<SessionPayload | null>(null)
+  const [tab, setTab] = useState<'workouts' | 'checkins'>('workouts')
+  const [checkins, setCheckins] = useState<CheckinRecord[]>([])
+  const [ckState, setCkState] = useState<'loading' | 'ready' | 'offline' | 'outdated'>('loading')
+  const [selectedCk, setSelectedCk] = useState<CheckinRecord | null>(null)
+  const [openEx, setOpenEx] = useState<string | null>(null)
 
   useEffect(() => {
     const dlg = ref.current
@@ -102,11 +108,17 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
     if (open && !dlg.open) {
       dlg.showModal()
       setSelected(null)
+      setSelectedCk(null)
       setSessions(cachedHistory())
       setState('loading')
       fetchHistory().then((list) => {
         if (Array.isArray(list)) setSessions(list)
         setState(Array.isArray(list) ? 'ready' : list === 'outdated' ? 'outdated' : 'offline')
+      })
+      setCkState('loading')
+      fetchCheckins().then((list) => {
+        if (Array.isArray(list)) setCheckins(list)
+        setCkState(Array.isArray(list) ? 'ready' : list === 'outdated' ? 'outdated' : 'offline')
       })
     } else if (!open && dlg.open) {
       dlg.close()
@@ -116,7 +128,8 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
   // block body: newer browsers return a Promise from scrollTo, which React would treat as a cleanup
   useEffect(() => {
     bodyRef.current?.scrollTo(0, 0)
-  }, [selected])
+    setOpenEx(null)
+  }, [selected, selectedCk, tab])
 
   const shown = useMemo(() => sessions.filter((s) => filter === null || s.dayNumber === filter), [sessions, filter])
   const detail = selected ? sessionExercises(selected) : null
@@ -127,7 +140,17 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
       onClick={(e) => !coach && e.target === e.currentTarget && ref.current?.close()}>
       <div className="day-box" style={photo ? ({ '--photo': photo } as CSSProperties) : undefined}>
         <header className="day-head">
-          {selected ? (
+          {selectedCk ? (
+            <>
+              <button type="button" className="back" onClick={() => setSelectedCk(null)} aria-label="Back to all check-ins">
+                <svg viewBox="0 0 10 16" aria-hidden="true"><path d="M8 2L2 8l6 6" /></svg>
+              </button>
+              <h2>
+                <small>WEEKLY</small>check-in
+                <span className="h-date">{fmtDate(selectedCk.date)} · {fmtTime(selectedCk.date)}</span>
+              </h2>
+            </>
+          ) : selected ? (
             <>
               <button type="button" className="back" onClick={() => setSelected(null)} aria-label="Back to all sessions">
                 <svg viewBox="0 0 10 16" aria-hidden="true"><path d="M8 2L2 8l6 6" /></svg>
@@ -152,7 +175,9 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
         </header>
 
         <div className="day-body" ref={bodyRef}>
-          {selected && detail ? (
+          {selectedCk ? (
+            <CheckinDetail c={selectedCk} />
+          ) : selected && detail ? (
             <>
               <CompareBar s={selected} prev={previousOf(selected, sessions)} />
               <ScoreStrip training={trainingScore(selected)} extras={{ cardio: selected.cardio, diet: selected.diet }} />
@@ -166,6 +191,8 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
                     exercise={ex}
                     entry={row ? toEntry(row) : undefined}
                     previous={row && row.prev !== '' ? { weight: Number(row.prev) } : undefined}
+                    open={openEx === ex.id}
+                    onToggle={() => setOpenEx((cur) => (cur === ex.id ? null : ex.id))}
                     readOnly
                   />
                 ))}
@@ -174,6 +201,29 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
             </>
           ) : (
             <>
+              <div className="hist-tabs" role="tablist" aria-label="History type">
+                <button type="button" role="tab" aria-selected={tab === 'workouts'} onClick={() => setTab('workouts')}>Workouts</button>
+                <button type="button" role="tab" aria-selected={tab === 'checkins'} onClick={() => setTab('checkins')}>
+                  Check-ins{checkins.length ? <small>{checkins.length}</small> : null}
+                </button>
+              </div>
+
+              {tab === 'checkins' ? (
+                <>
+                  {ckState === 'loading' && !checkins.length && <p className="hist-msg">Loading check-ins…</p>}
+                  {ckState === 'offline' && <p className="hist-msg warn">Couldn't reach Google Sheet – check your connection.</p>}
+                  {ckState === 'outdated' && (
+                    <p className="hist-msg warn">
+                      The Google Sheet script needs updating to show check-ins (Apps Script → Deploy → Manage deployments → New version).
+                    </p>
+                  )}
+                  {ckState === 'ready' && !checkins.length && (
+                    <p className="hist-msg">No check-ins yet. They show up here after <b>Weekly check-in</b> is sent.</p>
+                  )}
+                  <CheckinList items={checkins} onOpen={setSelectedCk} />
+                </>
+              ) : (
+              <>
               <div className="hist-filter" role="tablist" aria-label="Filter by day">
                 <button type="button" role="tab" aria-selected={filter === null} onClick={() => setFilter(null)}>All</button>
                 {DAYS.map((d) => (
@@ -230,6 +280,8 @@ export function HistoryModal({ open, onClose, coach = false }: Props) {
                   )
                 })}
               </ul>
+              </>
+              )}
             </>
           )}
         </div>

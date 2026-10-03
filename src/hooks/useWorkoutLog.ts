@@ -4,6 +4,8 @@ export type Failure = 'yes' | 'no' | null
 
 export type ExerciseLog = {
   cur?: string
+  /** reps on the lowest working set */
+  reps?: string
   done?: string
   fail?: Failure
 }
@@ -56,19 +58,13 @@ export function useWorkoutLog() {
   const finish = useCallback((dayId: string, ids: string[]) => {
     setLog((l) => {
       const next = { ...l }
-      for (const id of ids) next[id] = { cur: '', done: '', fail: null }
+      for (const id of ids) next[id] = { cur: '', reps: '', done: '', fail: null }
       return next
     })
     setExtras((x) => ({ ...x, [dayId]: {} }))
   }, [])
 
   return { log, update, extras, updateExtras, finish }
-}
-
-export function commitment(entry: ExerciseLog | undefined, target: number): number {
-  const done = parseFloat(entry?.done ?? '')
-  if (!target || !(done >= 0)) return 0
-  return Math.min(100, Math.round((done / target) * 100))
 }
 
 /**

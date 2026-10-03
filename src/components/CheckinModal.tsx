@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { EMPTY_ANSWERS, MAX_PHOTOS, QUESTIONS, REQUIRED, type CheckinAnswers, type Question } from '../data/checkin'
 import { compressImage } from '../lib/compressImage'
-import { fetchLastCheckin, sendCheckin, type CheckinResult } from '../lib/sheetSync'
+import { cachedHistory, fetchHistory, fetchLastCheckin, sendCheckin, type CheckinResult } from '../lib/sheetSync'
+import { weekAverages, type WeekAverages } from '../lib/weekAverages'
 import { checkinMessage, whatsappLink } from '../lib/whatsapp'
 
 const DRAFT_KEY = 'checkin-draft-v1'
@@ -27,6 +28,9 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
   const [status, setStatus] = useState<Status>('idle')
   const [busyPhotos, setBusyPhotos] = useState(false)
   const [waLink, setWaLink] = useState('')
+  // ratings filled in from the daily logs; cleared per question once the trainee changes it
+  const [auto, setAuto] = useState<Set<string>>(new Set())
+  const [week, setWeek] = useState<WeekAverages | null>(null)
 
   useEffect(() => {
     const dlg = ref.current
@@ -39,6 +43,21 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
       fetchLastCheckin().then((last) => {
         if (last) setA((cur) => (cur.prevWeight ? cur : { ...cur, prevWeight: String(last.weight) }))
       })
+      // questions 1-3: start from the week's daily logs instead of asking twice
+      const prefill = (w: WeekAverages) => {
+        setWeek(w)
+        setA((cur) => {
+          const next = { ...cur }
+          const filled = new Set<string>()
+          for (const k of ['training', 'diet', 'cardio'] as const) {
+            if (cur[k] == null && w[k] !== undefined) { next[k] = w[k]!; filled.add(k) }
+          }
+          if (filled.size) setAuto((prev) => new Set([...prev, ...filled]))
+          return next
+        })
+      }
+      prefill(weekAverages(cachedHistory()))
+      fetchHistory().then((h) => Array.isArray(h) && prefill(weekAverages(h)))
     } else if (!open && dlg.open) {
       dlg.close()
     }
@@ -55,6 +74,12 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
 
   const set = <K extends keyof CheckinAnswers>(key: K, value: CheckinAnswers[K]) => {
     setA((cur) => ({ ...cur, [key]: value }))
+    setAuto((x) => {
+      if (!x.has(key)) return x
+      const next = new Set(x)
+      next.delete(key)
+      return next
+    })
     setMissing((m) => {
       if (!m.has(key)) return m
       const next = new Set(m)
@@ -84,10 +109,11 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
     const weight = parseFloat(a.weight)
     const { result, photosFolder } = await sendCheckin(a, photos.map(({ type, data }) => ({ type, data })), isNaN(weight) ? '' : weight)
     setStatus(result)
-    if (result !== 'failed') {
+    if (result === 'sent' || result === 'not-configured') {
       // build the WhatsApp summary before the form is cleared
       setWaLink(whatsappLink(checkinMessage(a, photos.length, photosFolder)))
       setA({ ...EMPTY_ANSWERS, prevWeight: a.weight })
+      setAuto(new Set())
       setPhotos([])
       bodyRef.current?.scrollTo(0, 0)
     }
@@ -128,6 +154,9 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
         )}
         {q.kind === 'text' && (
           <textarea rows={3} value={a[q.key] as string} placeholder="Type here…" onChange={(e) => set(q.key, e.target.value as never)} />
+        )}
+        {auto.has(q.key) && (
+          <p className="q-auto">Filled in from your {week?.workouts ?? ''} logged day{week?.workouts === 1 ? '' : 's'} this week – change it if it doesn't feel right.</p>
         )}
         {bad && <p className="q-err">Required</p>}
       </fieldset>
@@ -202,6 +231,9 @@ export function CheckinModal({ open, onClose }: { open: boolean; onClose: () => 
 
         {status !== 'sent' && status !== 'not-configured' && (
           <>
+            {status === 'unauthorized' && (
+              <p className="sync sync-queued" role="status">Password changed – switch user and sign in again. Your answers are still here.</p>
+            )}
             {status === 'failed' && (
               <p className="sync sync-queued" role="status">
                 Couldn't send – check your connection and try again, or{' '}

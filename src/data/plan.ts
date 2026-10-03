@@ -17,8 +17,6 @@ export type Day = {
   exercises: Exercise[]
 }
 
-export const TRAINING_LOG_URL = 'https://docs.google.com/spreadsheets/d/1iEnM_nhSk6OS7MttzvC3i2P1hL56BHtAZw7PN_B6r1Y'
-
 export const DAYS: Day[] = [
   {
     "id": "day1",

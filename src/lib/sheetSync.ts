@@ -1,5 +1,6 @@
 import type { Day } from '../data/plan'
-import { commitment, type DayExtras, type ExerciseLog } from '../hooks/useWorkoutLog'
+import type { DayExtras, ExerciseLog } from '../hooks/useWorkoutLog'
+import { exerciseScore } from './score'
 
 export type SheetRow = {
   exercise: string
@@ -10,6 +11,8 @@ export type SheetRow = {
   target: number
   commitment: number
   failure: 'Yes' | 'No' | ''
+  /** reps on the lowest set; '' when not logged (and for older rows) */
+  reps?: number | ''
 }
 
 export type SessionPayload = {
@@ -26,7 +29,7 @@ export type SessionPayload = {
 /** True when the session holds anything worth saving. */
 export const hasContent = (s: SessionPayload) => s.rows.length > 0 || s.cardio != null || s.diet != null
 
-export type SyncResult = 'sent' | 'queued' | 'not-configured' | 'empty'
+export type SyncResult = 'sent' | 'queued' | 'not-configured' | 'empty' | 'unauthorized'
 
 /** Latest logged weight per exercise, keyed by lastKey(). */
 export type LastWeights = Record<string, { weight: number; date: string }>
@@ -35,6 +38,7 @@ const SHEET_URL = import.meta.env.VITE_SHEET_URL as string | undefined
 const QUEUE_KEY = 'workout-sync-queue-v1'
 const LAST_KEY = 'workout-last-v1'
 
+export const sheetConfigured = !!SHEET_URL
 export const lastKey = (dayNumber: number, exercise: string) => `${dayNumber}|${exercise}`
 
 const num = (v?: string): number | '' => {
@@ -42,11 +46,41 @@ const num = (v?: string): number | '' => {
   return isNaN(n) ? '' : n
 }
 
+// ---- password: sent with every request, checked by the Apps Script ----
+
+let pin = ''
+export const setPin = (value: string) => { pin = value }
+
+function sheetUrl(view?: string, withPin = pin) {
+  const u = new URL(SHEET_URL!)
+  if (view) u.searchParams.set('view', view)
+  if (withPin) u.searchParams.set('pin', withPin)
+  return u.toString()
+}
+
+async function getJson(view?: string) {
+  const body = await (await fetch(sheetUrl(view))).json()
+  if (body.error === 'unauthorized') throw new Error('unauthorized')
+  return body
+}
+
+/** 'trainee' | 'coach' | 'open' for a valid password, null for a wrong one; throws when offline. */
+export async function checkPin(candidate: string): Promise<'trainee' | 'coach' | 'open' | null> {
+  if (!SHEET_URL) return 'open'
+  const body = await (await fetch(sheetUrl('auth', candidate))).json()
+  if (body.ok === true && body.role) return body.role
+  if (body.error === 'unauthorized') return null
+  // an Apps Script from before passwords: no auth endpoint, so it is open
+  return body.ok === true ? 'open' : null
+}
+
+// ---- workouts ----
+
 /** One row per exercise the trainee actually filled in. */
 export function buildSession(day: Day, log: Record<string, ExerciseLog>, last: LastWeights, extras: DayExtras = {}): SessionPayload {
   const rows = day.exercises.flatMap((ex): SheetRow[] => {
     const e = log[ex.id]
-    if (!e || (!e.cur && !e.done && !e.fail)) return []
+    if (!e || (!e.cur && !e.done && !e.fail && !e.reps)) return []
     const found: LastWeights[string] | undefined = last[lastKey(day.number, ex.name)]
     const prev: number | '' = found ? found.weight : '', cur = num(e.cur)
     return [{
@@ -56,8 +90,9 @@ export function buildSession(day: Day, log: Record<string, ExerciseLog>, last: L
       change: prev !== '' && cur !== '' ? +(cur - prev).toFixed(2) : '',
       done: num(e.done),
       target: ex.workingSets,
-      commitment: commitment(e, ex.workingSets),
+      commitment: exerciseScore(e, ex, found?.weight).total,
       failure: e.fail === 'yes' ? 'Yes' : e.fail === 'no' ? 'No' : '',
+      reps: num(e.reps),
     }]
   })
   return {
@@ -82,11 +117,12 @@ function writeQueue(q: SessionPayload[]) {
   }
 }
 
-async function post(session: SessionPayload): Promise<boolean> {
+async function post(session: SessionPayload): Promise<boolean | 'unauthorized'> {
   try {
     // text/plain keeps this a "simple" request, so Apps Script needs no CORS preflight
-    const res = await fetch(SHEET_URL!, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(session) })
+    const res = await fetch(SHEET_URL!, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...session, pin }) })
     const body = await res.json()
+    if (body.error === 'unauthorized') return 'unauthorized'
     return body.ok === true
   } catch {
     return false
@@ -94,13 +130,19 @@ async function post(session: SessionPayload): Promise<boolean> {
 }
 
 let running: Promise<number> | null = null
+let lastUnauthorized = false
 
 /** Retry anything that failed earlier (offline gym, bad signal...). Runs one at a time. */
 export function flushQueue(): Promise<number> {
   if (!SHEET_URL) return Promise.resolve(0)
   const run = async () => {
     const sent = new Set<string>()
-    for (const s of readQueue()) if (await post(s)) sent.add(s.id)
+    lastUnauthorized = false
+    for (const s of readQueue()) {
+      const r = await post(s)
+      if (r === true) sent.add(s.id)
+      else if (r === 'unauthorized') lastUnauthorized = true
+    }
     // re-read: a session may have been queued while we were uploading
     const left = readQueue().filter((s) => !sent.has(s.id))
     writeQueue(left)
@@ -114,7 +156,9 @@ export async function sendSession(session: SessionPayload): Promise<SyncResult> 
   if (!hasContent(session)) return 'empty'
   if (!SHEET_URL) return 'not-configured'
   writeQueue([...readQueue(), session])
-  return (await flushQueue()) === 0 ? 'sent' : 'queued'
+  const left = await flushQueue()
+  if (left === 0) return 'sent'
+  return lastUnauthorized ? 'unauthorized' : 'queued'
 }
 
 // ---- previous weights: read back from the sheet, cached for offline use ----
@@ -135,16 +179,30 @@ function saveLast(last: LastWeights) {
   }
 }
 
-/** The sheet is the source of truth; null when it can't be reached. */
+/** Apply sessions that haven't reached the sheet yet on top of what the sheet says. */
+function withQueuedWeights(base: LastWeights): LastWeights {
+  const merged = { ...base }
+  for (const s of readQueue()) {
+    for (const r of s.rows) {
+      const k = lastKey(s.dayNumber, r.exercise)
+      if (r.cur !== '' && (!merged[k] || s.date > merged[k].date)) merged[k] = { weight: r.cur, date: s.date }
+    }
+  }
+  return merged
+}
+
+/**
+ * The sheet is the source of truth (rows deleted there disappear here too);
+ * only workouts still waiting to upload are layered on top. null when unreachable.
+ */
 export async function fetchLast(): Promise<LastWeights | null> {
   if (!SHEET_URL) return null
   try {
-    const body = await (await fetch(SHEET_URL)).json()
+    const body = await getJson()
     if (body.ok !== true || typeof body.last !== 'object') return null
-    // keep newer local entries that may still be waiting in the upload queue
-    const merged: LastWeights = { ...body.last }
-    for (const [k, v] of Object.entries(cachedLast())) if (!merged[k] || v.date > merged[k].date) merged[k] = v
+    const merged = withQueuedWeights(body.last)
     saveLast(merged)
+    if ('lastCheckin' in body) saveLastCheckin(body.lastCheckin ?? null)
     return merged
   } catch {
     return null
@@ -163,9 +221,28 @@ export function rememberSession(session: SessionPayload): LastWeights {
 // ---- weekly check-in ----
 
 export type CheckinPhoto = { type: string; data: string } // base64, no data: prefix
-export type CheckinResult = 'sent' | 'failed' | 'not-configured'
+export type CheckinResult = 'sent' | 'failed' | 'not-configured' | 'unauthorized'
 export type CheckinSendResult = { result: CheckinResult; photosFolder?: string }
 export type LastCheckin = { weight: number; date: string } | null
+
+/** A saved check-in as the sheet returns it. */
+export type CheckinRecord = {
+  date: string
+  weight: number | ''
+  prevWeight: number | ''
+  change: number | ''
+  training: number | ''
+  diet: number | ''
+  cardio: number | ''
+  lowSleep: string
+  soreness: string
+  progress: string
+  problems: string
+  harderDiet: string
+  uncomfortable: string
+  support: string
+  photos: { url: string; id: string }[]
+}
 
 const CHECKIN_LAST_KEY = 'checkin-last-v1'
 
@@ -189,27 +266,44 @@ function saveLastCheckin(v: LastCheckin) {
 export async function fetchLastCheckin(): Promise<LastCheckin> {
   if (!SHEET_URL) return cachedLastCheckin()
   try {
-    const body = await (await fetch(SHEET_URL)).json()
-    if (body.ok === true && body.lastCheckin) saveLastCheckin(body.lastCheckin)
+    const body = await getJson()
+    if (body.ok === true) saveLastCheckin(body.lastCheckin ?? null)
   } catch {
     // offline - use the cached value
   }
   return cachedLastCheckin()
 }
 
+/** Every check-in in the sheet; 'outdated' when the Apps Script predates this endpoint. */
+export async function fetchCheckins(): Promise<CheckinRecord[] | 'outdated' | null> {
+  if (!SHEET_URL) return null
+  try {
+    const body = await getJson('checkins')
+    if (body.ok === true && !Array.isArray(body.checkins)) return 'outdated'
+    return body.ok === true ? body.checkins : null
+  } catch {
+    return null
+  }
+}
+
 /** Check-ins carry photos, so they are sent straight away rather than queued in storage. */
 export async function sendCheckin(answers: object, photos: CheckinPhoto[], weight: number | ''): Promise<CheckinSendResult> {
   const date = new Date().toISOString()
-  if (weight !== '') saveLastCheckin({ weight, date })
-  if (!SHEET_URL) return { result: 'not-configured' }
+  if (!SHEET_URL) {
+    if (weight !== '') saveLastCheckin({ weight, date })
+    return { result: 'not-configured' }
+  }
   try {
     const res = await fetch(SHEET_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ type: 'checkin', date, answers, photos }),
+      body: JSON.stringify({ type: 'checkin', date, answers, photos, pin }),
     })
     const body = await res.json()
-    return body.ok === true ? { result: 'sent', photosFolder: body.photosFolder || undefined } : { result: 'failed' }
+    if (body.error === 'unauthorized') return { result: 'unauthorized' }
+    if (body.ok !== true) return { result: 'failed' }
+    if (weight !== '') saveLastCheckin({ weight, date })
+    return { result: 'sent', photosFolder: body.photosFolder || undefined }
   } catch {
     return { result: 'failed' }
   }
@@ -238,19 +332,19 @@ function saveHistory(list: SessionPayload[]) {
 const newestFirst = (list: SessionPayload[]) => [...list].sort((a, b) => (a.date < b.date ? 1 : -1))
 
 /**
- * Sheet history merged with sessions finished on this device that may not have uploaded yet.
+ * The sheet's history plus workouts still waiting to upload from this device.
+ * Anything removed from the sheet is dropped from the local copy too.
  * 'outdated' = the sheet answered but its Apps Script predates the history endpoint.
  */
 export async function fetchHistory(): Promise<SessionPayload[] | 'outdated' | null> {
   if (!SHEET_URL) return null
   try {
-    const body = await (await fetch(`${SHEET_URL}?view=history`)).json()
+    const body = await getJson('history')
     if (body.ok === true && !Array.isArray(body.sessions)) return 'outdated'
     if (body.ok !== true) return null
-    const byId = new Map<string, SessionPayload>()
-    for (const s of cachedHistory()) byId.set(s.id, s)
-    for (const s of body.sessions as SessionPayload[]) byId.set(s.id, s)
-    const merged = newestFirst([...byId.values()])
+    const remote = body.sessions as SessionPayload[]
+    const ids = new Set(remote.map((s) => s.id))
+    const merged = newestFirst([...remote, ...readQueue().filter((s) => !ids.has(s.id))])
     saveHistory(merged)
     return merged
   } catch {

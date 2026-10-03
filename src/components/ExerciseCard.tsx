@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
 import type { Exercise } from '../data/plan'
-import { commitment, type ExerciseLog, type Failure } from '../hooks/useWorkoutLog'
+import type { ExerciseLog, Failure } from '../hooks/useWorkoutLog'
+import { exerciseScore, minReps, setsComplete } from '../lib/score'
 import { Ring } from './Ring'
 import { Stepper } from './Stepper'
 
@@ -8,6 +8,9 @@ type Props = {
   exercise: Exercise
   entry: ExerciseLog | undefined
   previous?: { weight: number; date?: string }
+  /** open = full card; closed = one summary line (the day shows one exercise open at a time) */
+  open: boolean
+  onToggle: () => void
   onChange?: (patch: ExerciseLog) => void
   /** history view: same layout, values shown but not editable */
   readOnly?: boolean
@@ -24,7 +27,7 @@ function Delta({ prev, cur }: { prev?: number; cur?: string }) {
 
 const failText = (f?: Failure) => (f === 'yes' ? 'failure' : f === 'no' ? 'no failure' : null)
 
-export function ExerciseCard({ exercise: ex, entry, previous, onChange = () => {}, readOnly = false }: Props) {
+export function ExerciseCard({ exercise: ex, entry, previous, open, onToggle, onChange = () => {}, readOnly = false }: Props) {
   const facts: [string, string][] = [
     ['W.U', ex.warmupSets || '–'],
     ['Sets', String(ex.workingSets)],
@@ -33,41 +36,46 @@ export function ExerciseCard({ exercise: ex, entry, previous, onChange = () => {
     ['Rest', ex.rest],
   ]
   const setFail = (v: Failure) => onChange({ fail: entry?.fail === v ? null : v })
-  const pct = commitment(entry, ex.workingSets)
-  const complete = pct >= 100
-
-  // a finished exercise folds into one line so the next one is in view; tap to reopen
-  const [open, setOpen] = useState(readOnly || !complete)
-  const wasComplete = useRef(complete)
-  useEffect(() => {
-    if (readOnly) return
-    if (complete && !wasComplete.current) {
-      wasComplete.current = true
-      const t = setTimeout(() => setOpen(false), 700) // let the ring reach 100% first
-      return () => clearTimeout(t)
-    }
-    if (!complete) setOpen(true)
-    wasComplete.current = complete
-  }, [complete, readOnly])
+  const score = exerciseScore(entry, ex, previous?.weight)
+  const done = setsComplete(entry, ex)
+  const started = !!(entry?.cur || entry?.reps || entry?.done || entry?.fail)
+  const missing = started ? [
+    score.sets < 100 && 'sets not finished',
+    score.reps < 100 && (entry?.reps ? 'reps below target' : 'reps not logged'),
+    score.weight < 100 && (entry?.cur ? 'weight below last time' : 'weight not logged'),
+  ].filter(Boolean) : []
+  const scoreTitle = `Sets ${score.sets}% · Reps ${score.reps}% · Weight ${score.weight}%`
 
   if (!open) {
-    const parts = [entry?.cur ? `${entry.cur} kg` : null, `${entry?.done || 0}/${ex.workingSets} sets`, failText(entry?.fail)].filter(Boolean)
+    const logged = [
+      entry?.cur ? `${entry.cur} kg` : null,
+      entry?.reps ? `${entry.reps} reps` : null,
+      started ? `${entry?.done || 0}/${ex.workingSets} sets` : null,
+      failText(entry?.fail),
+    ].filter(Boolean)
+    const plan = [`${ex.workingSets} × ${ex.reps.replace(/\s*reps?/i, '')}`, previous ? `last ${previous.weight} kg` : null].filter(Boolean)
     return (
-      <article className="ex complete folded">
-        <button type="button" className="ex-fold" onClick={() => setOpen(true)} aria-expanded="false">
-          <span className="fold-check" aria-hidden="true">✓</span>
-          <span className="c-name">{ex.name}</span>
-          <span className="fold-sum">{parts.join(' · ')}</span>
-          <span className="fold-edit">Edit</span>
+      <article className={`ex ex-closed${done ? ' complete' : started ? ' started' : ''}`}>
+        <button type="button" className="ex-row" onClick={onToggle} aria-expanded="false">
+          {done ? <span className="fold-check" aria-hidden="true">✓</span> : <Ring value={score.total} />}
+          <span className="ex-row-text">
+            <span className="c-name">{ex.name}</span>
+            <span className="fold-sum">{(started ? logged : plan).join(' · ')}</span>
+          </span>
+          {done && <Ring value={score.total} />}
+          <span className="fold-edit">{readOnly ? 'Details' : done ? 'Edit' : started ? 'Continue' : 'Start'}</span>
         </button>
       </article>
     )
   }
 
   return (
-    <article className={complete ? 'ex complete' : 'ex'}>
+    <article className={done ? 'ex complete' : 'ex'}>
       <div className="ex-main">
-        <h3 className="c-name">{ex.name}</h3>
+        <button type="button" className="c-name ex-title" onClick={onToggle} aria-expanded="true" title={scoreTitle}>
+          <Ring value={score.total} />
+          <span>{ex.name}</span>
+        </button>
         {facts.map(([label, value]) => (
           <span key={label} className="cell">{value}</span>
         ))}
@@ -84,14 +92,6 @@ export function ExerciseCard({ exercise: ex, entry, previous, onChange = () => {
       </div>
 
       <div className="ex-track">
-        <div className="f f-commit">
-          <Ring value={pct} />
-          <span className="lbl">Commitment</span>
-          {!readOnly && complete && (
-            <button type="button" className="fold-btn" onClick={() => setOpen(false)}>Collapse ✓</button>
-          )}
-        </div>
-
         <div className="f">
           <span className="lbl">
             Previous weight
@@ -122,6 +122,19 @@ export function ExerciseCard({ exercise: ex, entry, previous, onChange = () => {
         </div>
 
         <div className="f">
+          <label className="lbl" htmlFor={readOnly ? undefined : `${ex.id}r`}>
+            Reps <span className="u">lowest set · target {ex.reps.replace(/\s*reps?/i, '')}</span>
+          </label>
+          {readOnly ? (
+            <span className="inp readonly"><output>{entry?.reps || '–'}</output><em>reps</em></span>
+          ) : (
+            <Stepper id={`${ex.id}r`} label="reps" step={1} inputMode="numeric" placeholder={ex.reps.replace(/\s*reps?/i, '')}
+              base={minReps(ex) || undefined} startAtBase
+              value={entry?.reps ?? ''} onChange={(reps) => onChange({ reps })} />
+          )}
+        </div>
+
+        <div className="f">
           <label className="lbl" htmlFor={readOnly ? undefined : `${ex.id}s`}>
             Sets done <span className="u">/ {ex.workingSets}</span>
           </label>
@@ -140,6 +153,12 @@ export function ExerciseCard({ exercise: ex, entry, previous, onChange = () => {
             <button type="button" data-v="no" aria-pressed={entry?.fail === 'no'} disabled={readOnly} onClick={() => setFail('no')}>NO</button>
           </div>
         </div>
+
+        {missing.length > 0 && (
+          <p className="score-note">
+            {score.total}% · {missing.join(' · ')}
+          </p>
+        )}
       </div>
     </article>
   )

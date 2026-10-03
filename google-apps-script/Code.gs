@@ -6,6 +6,11 @@
  * Setup: open the spreadsheet → Extensions → Apps Script → paste this file →
  * Deploy → New deployment → Web app (Execute as: Me, Who has access: Anyone).
  * After editing: Deploy → Manage deployments → ✏️ → Version: New version.
+ *
+ * Passwords (Project Settings → Script properties):
+ *   TRAINEE_PIN  - Islam: can log workouts / check-ins and read everything
+ *   COACH_PIN    - Shady: read only
+ * While neither is set the web app stays open (no password), as before.
  */
 
 const CHECKIN_TAB = 'Check-ins';
@@ -17,17 +22,48 @@ const CHECKIN_HEADERS = [
   'Anything uncomfortable', 'What can I offer', 'Photos',
 ];
 
+/** 'trainee' | 'coach' | 'open' (no passwords configured) | null (wrong password) */
+function roleFor(pin) {
+  const props = PropertiesService.getScriptProperties();
+  const trainee = props.getProperty('TRAINEE_PIN');
+  const coach = props.getProperty('COACH_PIN');
+  if (!trainee && !coach) return 'open';
+  if (pin && trainee && String(pin) === trainee) return 'trainee';
+  if (pin && coach && String(pin) === coach) return 'coach';
+  return null;
+}
+
 function doPost(e) {
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
     const data = JSON.parse(e.postData.contents);
+    const role = roleFor(data.pin);
+    if (role !== 'trainee' && role !== 'open') return json({ ok: false, error: 'unauthorized' });
     return json(data.type === 'checkin' ? saveCheckin(data) : saveWorkout(data));
   } catch (err) {
     return json({ ok: false, error: String(err) });
   } finally {
     lock.releaseLock();
   }
+}
+
+/**
+ * GET ?view=auth      → which role the password belongs to
+ * GET ?view=history   → every finished workout (see workoutHistory)
+ * GET ?view=checkins  → every weekly check-in, newest first
+ * GET                 → latest "Current weight" per exercise + latest check-in weight
+ * Every call needs &pin=... once passwords are set.
+ */
+function doGet(e) {
+  const p = (e && e.parameter) || {};
+  const role = roleFor(p.pin);
+  if (!role) return json({ ok: false, error: 'unauthorized' });
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (p.view === 'auth') return json({ ok: true, role: role });
+  if (p.view === 'history') return json({ ok: true, sessions: workoutHistory(ss) });
+  if (p.view === 'checkins') return json({ ok: true, checkins: checkinHistory(ss) });
+  return json({ ok: true, sheet: ss.getName(), last: lastWeights(ss), lastCheckin: lastCheckin(ss) });
 }
 
 function saveWorkout(data) {
@@ -38,15 +74,17 @@ function saveWorkout(data) {
   const rows = data.rows.map(r => [
     date, 'Day ' + data.dayNumber, data.dayLabel, r.exercise,
     r.prev, r.cur, r.change, r.done, r.target, r.commitment / 100, r.failure, data.id || '', cardio, diet,
+    r.reps == null ? '' : r.reps,
   ]);
   // only cardio / diet answered: still record the day on one row
   if (!rows.length && (cardio !== '' || diet !== '')) {
-    rows.push([date, 'Day ' + data.dayNumber, data.dayLabel, '', '', '', '', '', '', '', '', data.id || '', cardio, diet]);
+    rows.push([date, 'Day ' + data.dayNumber, data.dayLabel, '', '', '', '', '', '', '', '', data.id || '', cardio, diet, '']);
   }
   // L groups one finished workout's rows into a session (the site's "View" history); M/N are the day's ratings
   ensureHeader(sheet, 12, 'Session');
   ensureHeader(sheet, 13, 'Cardio /10');
   ensureHeader(sheet, 14, 'Diet /10');
+  ensureHeader(sheet, 15, 'Reps (lowest set)');
   if (rows.length) {
     const start = sheet.getLastRow() + 1;
     sheet.getRange(start, 1, rows.length, rows[0].length).setValues(rows);
@@ -105,14 +143,8 @@ function savePhotos(photos, date) {
   return { links: links, folder: folder.getUrl() };
 }
 
-/**
- * GET ?view=history → every finished workout (see workoutHistory).
- * GET → latest "Current weight" per exercise (keyed "<day number>|<exercise>")
- * plus the latest check-in weight. Opening the URL in a browser is also a health check.
- */
-function doGet(e) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (e && e.parameter && e.parameter.view === 'history') return json({ ok: true, sessions: workoutHistory(ss) });
+/** Latest "Current weight" per "<day number>|<exercise>" - next session's "Previous weight". */
+function lastWeights(ss) {
   const values = ss.getSheets()[0].getDataRange().getValues().slice(1); // skip header row
   const last = {};
   for (const row of values) {
@@ -124,19 +156,17 @@ function doGet(e) {
   }
   const out = {};
   for (const k in last) out[k] = { weight: last[k].weight, date: new Date(last[k].time).toISOString() };
+  return out;
+}
 
-  let lastCheckin = null;
+function lastCheckin(ss) {
   const ck = ss.getSheetByName(CHECKIN_TAB);
-  if (ck && ck.getLastRow() > 1) {
-    const rows = ck.getRange(2, 1, ck.getLastRow() - 1, 2).getValues();
-    for (let i = rows.length - 1; i >= 0; i--) {
-      if (rows[i][1] !== '') {
-        lastCheckin = { weight: Number(rows[i][1]), date: new Date(rows[i][0]).toISOString() };
-        break;
-      }
-    }
+  if (!ck || ck.getLastRow() < 2) return null;
+  const rows = ck.getRange(2, 1, ck.getLastRow() - 1, 2).getValues();
+  for (let i = rows.length - 1; i >= 0; i--) {
+    if (rows[i][1] !== '') return { weight: Number(rows[i][1]), date: new Date(rows[i][0]).toISOString() };
   }
-  return json({ ok: true, sheet: ss.getName(), last: out, lastCheckin: lastCheckin });
+  return null;
 }
 
 /** Every finished workout, newest first, with its exercise rows - as logged. */
@@ -144,7 +174,7 @@ function workoutHistory(ss) {
   const values = ss.getSheets()[0].getDataRange().getValues().slice(1);
   const sessions = {};
   for (const row of values) {
-    const [date, day, label, exercise, prev, cur, change, done, target, commitment, failure, session, cardio, diet] = row;
+    const [date, day, label, exercise, prev, cur, change, done, target, commitment, failure, session, cardio, diet, reps] = row;
     if (!date) continue;
     const iso = (date instanceof Date ? date : new Date(date)).toISOString();
     const key = session || iso + '|' + day;
@@ -158,10 +188,39 @@ function workoutHistory(ss) {
     sessions[key].rows.push({
       exercise: exercise, prev: prev, cur: cur, change: change, done: done, target: target,
       commitment: typeof commitment === 'number' ? Math.round(commitment * 100) : 0,
-      failure: failure,
+      failure: failure, reps: reps === undefined ? '' : reps,
     });
   }
   return Object.keys(sessions).map(k => sessions[k]).sort((a, b) => (a.date < b.date ? 1 : -1));
+}
+
+/** Every weekly check-in, newest first; photos as Drive links + file ids. */
+function checkinHistory(ss) {
+  const ck = ss.getSheetByName(CHECKIN_TAB);
+  if (!ck || ck.getLastRow() < 2) return [];
+  const rows = ck.getRange(2, 1, ck.getLastRow() - 1, CHECKIN_HEADERS.length).getValues();
+  return rows.filter(r => r[0] !== '').map(r => ({
+    date: (r[0] instanceof Date ? r[0] : new Date(r[0])).toISOString(),
+    weight: r[1], prevWeight: r[2], change: r[3],
+    training: r[4], diet: r[5], cardio: r[6], lowSleep: r[7], soreness: r[8],
+    progress: r[9], problems: r[10], harderDiet: r[11], uncomfortable: r[12], support: r[13],
+    photos: String(r[14] || '').split('\n').filter(Boolean).map(url => {
+      const m = url.match(/\/d\/([\w-]+)/);
+      return { url: url, id: m ? m[1] : '' };
+    }),
+  })).reverse();
+}
+
+/**
+ * Run this once from the Apps Script editor (select it, press Run) to wipe the
+ * test data before real use: keeps the header rows, deletes everything else.
+ */
+function clearAllData() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheets = [ss.getSheets()[0], ss.getSheetByName(CHECKIN_TAB)].filter(Boolean);
+  for (const sheet of sheets) {
+    if (sheet.getLastRow() > 1) sheet.deleteRows(2, sheet.getLastRow() - 1);
+  }
 }
 
 function num(v) {
