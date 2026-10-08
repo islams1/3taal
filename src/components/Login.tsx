@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react'
-import { checkPin } from '../lib/sheetSync'
+import { cachedAuthMode, checkPin } from '../lib/sheetSync'
 
 export type Role = 'islam' | 'shady'
 
@@ -20,24 +20,32 @@ const USERS: { role: Role; name: string; note: string; needs: 'trainee' | 'coach
  */
 export function Login({ onPick }: { onPick: (role: Role, pin: string) => void }) {
   const [picked, setPicked] = useState<(typeof USERS)[number] | null>(null)
+  // true once the sheet says a password is required - only then is the field shown
+  const [needsPin, setNeedsPin] = useState(() => cachedAuthMode() === 'locked')
   const [pin, setPin] = useState('')
   const [state, setState] = useState<'idle' | 'checking' | 'wrong' | 'offline'>('idle')
   const input = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (picked) input.current?.focus()
-  }, [picked])
+    if (needsPin) input.current?.focus()
+  }, [needsPin, picked])
 
   const choose = async (u: (typeof USERS)[number]) => {
+    if (state === 'checking') return
     setPicked(u)
     setPin('')
+    if (needsPin) return setState('idle') // already know a password is needed
+    // the sheet had no passwords last time → straight in (the app re-checks in the background)
+    if (cachedAuthMode() === 'open') return onPick(u.role, '')
     setState('checking')
-    // no passwords set on the sheet yet → straight in
     try {
-      if ((await checkPin('')) === 'open') return onPick(u.role, '')
+      // the sheet can be slow; after 3s assume no password - a wrong guess just brings the login back
+      const mode = await Promise.race([checkPin(''), new Promise<'slow'>((r) => setTimeout(() => r('slow'), 3000))])
+      if (mode === 'open' || mode === 'slow') return onPick(u.role, '')
+      setNeedsPin(true)
       setState('idle')
     } catch {
-      setState('idle')
+      setState('offline')
     }
   }
 
@@ -64,13 +72,16 @@ export function Login({ onPick }: { onPick: (role: Role, pin: string) => void })
             <span className="login-avatar" aria-hidden="true"><svg viewBox="0 0 24 24"><path d={ICONS[u.role]} /></svg></span>
             <span className="login-text">
               <b>{u.name}</b>
-              <small>{u.note}</small>
+              <small>{picked?.role === u.role && state === 'checking' && !needsPin ? 'Signing in…' : u.note}</small>
             </span>
           </button>
         ))}
       </div>
 
-      {picked && (
+      {picked && !needsPin && state === 'offline' && (
+        <p className="pin-msg bad">Couldn't reach the server – check your connection and tap again</p>
+      )}
+      {picked && needsPin && (
         <form className="pin-form" onSubmit={submit}>
           <label htmlFor="pin">Password for {picked.name}</label>
           <div className="pin-row">

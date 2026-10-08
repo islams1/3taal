@@ -46,7 +46,41 @@ const num = (v?: string): number | '' => {
   return isNaN(n) ? '' : n
 }
 
+// ---- network: Apps Script can take 5-30s to answer, so nothing waits on it forever ----
+
+const READ_TIMEOUT = 25_000
+// writes get longer: aborting one the sheet then saves anyway would only cause a retry
+const WRITE_TIMEOUT = 60_000
+
+async function timedFetch(url: string, init: RequestInit = {}, ms = READ_TIMEOUT): Promise<Response> {
+  const ctrl = new AbortController()
+  const t = setTimeout(() => ctrl.abort(), ms)
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal })
+  } finally {
+    clearTimeout(t)
+  }
+}
+
 // ---- password: sent with every request, checked by the Apps Script ----
+
+const AUTH_MODE_KEY = 'auth-mode-v1'
+/** What the sheet said last time: 'open' (no passwords) or 'locked'. Lets sign-in skip the wait. */
+export function cachedAuthMode(): 'open' | 'locked' | null {
+  try {
+    const m = localStorage.getItem(AUTH_MODE_KEY)
+    return m === 'open' || m === 'locked' ? m : null
+  } catch {
+    return null
+  }
+}
+function saveAuthMode(m: 'open' | 'locked') {
+  try {
+    localStorage.setItem(AUTH_MODE_KEY, m)
+  } catch {
+    // storage blocked
+  }
+}
 
 let pin = ''
 export const setPin = (value: string) => { pin = value }
@@ -59,7 +93,7 @@ function sheetUrl(view?: string, withPin = pin) {
 }
 
 async function getJson(view?: string) {
-  const body = await (await fetch(sheetUrl(view))).json()
+  const body = await (await timedFetch(sheetUrl(view))).json()
   if (body.error === 'unauthorized') throw new Error('unauthorized')
   return body
 }
@@ -67,11 +101,15 @@ async function getJson(view?: string) {
 /** 'trainee' | 'coach' | 'open' for a valid password, null for a wrong one; throws when offline. */
 export async function checkPin(candidate: string): Promise<'trainee' | 'coach' | 'open' | null> {
   if (!SHEET_URL) return 'open'
-  const body = await (await fetch(sheetUrl('auth', candidate))).json()
-  if (body.ok === true && body.role) return body.role
-  if (body.error === 'unauthorized') return null
-  // an Apps Script from before passwords: no auth endpoint, so it is open
-  return body.ok === true ? 'open' : null
+  const body = await (await timedFetch(sheetUrl('auth', candidate))).json()
+  if (body.error === 'unauthorized') {
+    saveAuthMode('locked')
+    return null
+  }
+  // an Apps Script from before passwords has no auth endpoint, so it is open
+  const role = body.ok === true ? (body.role ?? 'open') : null
+  if (role) saveAuthMode(role === 'open' ? 'open' : 'locked')
+  return role
 }
 
 // ---- workouts ----
@@ -120,7 +158,7 @@ function writeQueue(q: SessionPayload[]) {
 async function post(session: SessionPayload): Promise<boolean | 'unauthorized'> {
   try {
     // text/plain keeps this a "simple" request, so Apps Script needs no CORS preflight
-    const res = await fetch(SHEET_URL!, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...session, pin }) })
+    const res = await timedFetch(SHEET_URL!, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...session, pin }) }, WRITE_TIMEOUT)
     const body = await res.json()
     if (body.error === 'unauthorized') return 'unauthorized'
     return body.ok === true
@@ -294,11 +332,11 @@ export async function sendCheckin(answers: object, photos: CheckinPhoto[], weigh
     return { result: 'not-configured' }
   }
   try {
-    const res = await fetch(SHEET_URL, {
+    const res = await timedFetch(SHEET_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ type: 'checkin', date, answers, photos, pin }),
-    })
+    }, WRITE_TIMEOUT)
     const body = await res.json()
     if (body.error === 'unauthorized') return { result: 'unauthorized' }
     if (body.ok !== true) return { result: 'failed' }

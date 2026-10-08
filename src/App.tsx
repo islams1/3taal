@@ -60,13 +60,14 @@ export default function App() {
     return () => removeEventListener('online', sync)
   }, [])
 
-  // a saved sign-in whose password no longer works (passwords added or changed) goes back to the login
+  // a sign-in whose password doesn't work (passwords added or changed, or a fast entry while the
+  // sheet was slow) goes back to the login, which then asks for the password
   useEffect(() => {
     if (!role) return
     let stored = ''
     try { stored = localStorage.getItem(PIN_KEY) ?? '' } catch { /* storage blocked */ }
     checkPin(stored).then((r) => { if (r === null) logout() }, () => { /* offline: keep working from this device */ })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [role]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // previous weights may have been logged from another device - refresh when a day opens
   useEffect(() => {

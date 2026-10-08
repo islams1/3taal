@@ -68,6 +68,11 @@ function doGet(e) {
 
 function saveWorkout(data) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  // a retry of a workout that already reached the sheet (slow answer, client gave up): don't add it twice
+  if (data.id && sheet.getLastRow() > 1 &&
+      sheet.getRange(2, 12, sheet.getLastRow() - 1, 1).createTextFinder(data.id).matchEntireCell(true).findNext()) {
+    return { ok: true, added: 0, duplicate: true };
+  }
   const date = new Date(data.date);
   const cardio = data.cardio == null ? '' : data.cardio;
   const diet = data.diet == null ? '' : data.diet;
